@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { Box, AppBar, Toolbar, Typography, IconButton, Avatar, Badge } from '@mui/material';
 import { Settings, Notifications } from '@mui/icons-material';
-import Allies from '../allies/Allies';
-import Enemy from '../enemies/Enemies';
-import MapComponent from '../map/MapComponent';
+import Allies from '../offense/Offense';
+import Enemy from '../defense/Defense';
+import MapComponent from '../../map/MapComponent';
+import { useCamera } from '../../../hooks/Camera/useCamera';
 
 interface DroneData {
   id: number;
@@ -14,14 +15,24 @@ interface DroneData {
   speed: number;
   altitude: number;
   heading: number;
+  location: string;
+  token: string;
 }
 
 export default function Dashboard() {
-  const [drones, setDrones] = useState<DroneData[]>([]);
-  const [mapCenter, setMapCenter] = useState<[number, number]>([100.5231, 13.7563]);
-  const [mapZoom, setMapZoom] = useState(13);
-  const dronesDataRef = useRef<DroneData[]>([]);
-  const animationFrameRef = useRef<number | undefined>(undefined);
+    const [drones, setDrones] = useState<DroneData[]>([]);
+    const [mapCenter, setMapCenter] = useState<[number, number]>([100.5231, 13.7563]);
+    const [mapZoom, setMapZoom] = useState(13);
+    const dronesDataRef = useRef<DroneData[]>([]);
+    const animationFrameRef = useRef<number | undefined>(undefined);
+    
+    // Credentials
+    const DEFENCE_LOCATION = '02999a4a-361c-498c-a250-d5d70dd39fb8';
+    const DEFENCE_TOKEN = 'df2a423f93a9c512e1bc95ec29e1c44a843c71a3676aba595c891a8ce5e785a0';
+    const OFFENCE_LOCATION = 'd5fd9af8-098a-4cfb-bf02-8e89026af5f6';
+    const OFFENCE_TOKEN = '6e69670b-687d-439f-8c4e-b50dd087ce18';
+
+    const { data } = useCamera(OFFENCE_LOCATION, OFFENCE_TOKEN);
 
   // Initial drones data
   const initialDrones: DroneData[] = [
@@ -34,6 +45,8 @@ export default function Dashboard() {
       speed: 45,
       altitude: 120,
       heading: 45,
+      location: DEFENCE_LOCATION,
+      token: DEFENCE_TOKEN,
     },
     {
       id: 2,
@@ -44,6 +57,8 @@ export default function Dashboard() {
       speed: 38,
       altitude: 95,
       heading: 180,
+      location: DEFENCE_LOCATION,
+      token: DEFENCE_TOKEN,
     },
     {
       id: 3,
@@ -54,6 +69,8 @@ export default function Dashboard() {
       speed: 52,
       altitude: 150,
       heading: 270,
+      location: OFFENCE_LOCATION,
+      token: OFFENCE_TOKEN,
     },
     {
       id: 4,
@@ -64,6 +81,8 @@ export default function Dashboard() {
       speed: 48,
       altitude: 180,
       heading: 90,
+      location: OFFENCE_LOCATION,
+      token: OFFENCE_TOKEN,
     },
   ];
 
@@ -153,34 +172,47 @@ export default function Dashboard() {
   }, []);
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh', backgroundColor: '#0f0f1e' }}>
+    <Box 
+      sx={{ 
+        display: 'flex', 
+        flexDirection: 'column', 
+        height: '100vh', 
+        width: '100vw',
+        backgroundColor: '#0f0f1e', 
+        margin: 0, 
+        padding: 0,
+        overflow: 'hidden',
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+      }}
+    >
       {/* Top Navigation Bar */}
       <AppBar 
         position="static" 
+        elevation={0}
         sx={{ 
-          backgroundColor: '#1a1a2e',
+          backgroundColor: '#121212',
           borderBottom: '2px solid rgba(255, 255, 255, 0.1)',
+          margin: 0,
+          padding: 0,
         }}
       >
-        <Toolbar>
+        <Toolbar sx={{ minHeight: '64px !important', padding: '0 16px !important' }}>
           {/* Logo */}
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mr: 4 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mr: 4, ml:4}}>
             <Box
+              component="img"
+              src="https://cdn.discordapp.com/attachments/1437110414948171807/1437489635776397332/Tactical.jpg?ex=691416cc&is=6912c54c&hm=30a0836d84e6ee00eb28ee1b0b3fcfed9784adb85c19ddfcd78eb94f0d0f6de6&"
+              alt="Tactical Logo"
               sx={{
-                width: 50,
-                height: 50,
-                backgroundColor: 'white',
-                borderRadius: '8px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontWeight: 700,
-                color: '#1a1a2e',
-                fontSize: '0.75rem',
+                width: 60,
+                height: 60,
+                objectFit: 'cover',
               }}
-            >
-              TACTICAL
-            </Box>
+            />
           </Box>
 
           {/* Title */}
@@ -188,12 +220,12 @@ export default function Dashboard() {
             variant="h5"
             sx={{
               flexGrow: 1,
-              fontWeight: 700,
+              fontWeight: 500,
               color: 'white',
               letterSpacing: '1px',
             }}
           >
-            Drone Command & Control
+            TTC Command Post Visualization
           </Typography>
 
           {/* System Status */}
@@ -207,7 +239,7 @@ export default function Dashboard() {
                 boxShadow: '0 0 10px #22c55e',
               }}
             />
-            <Typography variant="body2" sx={{ color: 'white', fontWeight: 600 }}>
+            <Typography variant="body2" sx={{ color: 'white', fontWeight: 500 }}>
               System Status: Online
             </Typography>
           </Box>
@@ -218,10 +250,10 @@ export default function Dashboard() {
           </Typography>
 
           {/* Icons */}
-          <IconButton sx={{ color: 'white', mr: 1 }}>
+          <IconButton sx={{ color: 'white', mr: 1, border:2, borderRadius:'10px', bgcolor:'#404040'}}>
             <Settings />
           </IconButton>
-          <IconButton sx={{ color: 'white', mr: 1 }}>
+          <IconButton sx={{ color: 'white', mr: 1, border:2, borderRadius:'10px', bgcolor:'#404040'}}>
             <Badge badgeContent={3} color="error">
               <Notifications />
             </Badge>
@@ -237,14 +269,21 @@ export default function Dashboard() {
       </AppBar>
 
       {/* Main Content */}
-      <Box sx={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+      <Box 
+        sx={{ 
+          display: 'flex', 
+          flex: 1, 
+          overflow: 'hidden',
+          margin: 0,
+          padding: 0,
+        }}
+      >
         {/* Left Panel - Allies */}
-        <Allies drones={drones} onDroneClick={handleDroneClick} />
+        <Allies />
 
         {/* Center - Map */}
-        <Box sx={{ flex: 1, position: 'relative' }}>
+        <Box sx={{ flex: 1, position: 'relative', margin: 0, padding: 0 }}>
           <MapComponent 
-            drones={drones} 
             center={mapCenter} 
             zoom={mapZoom}
             onMapMove={handleMapMove}
@@ -252,7 +291,7 @@ export default function Dashboard() {
         </Box>
 
         {/* Right Panel - Enemy */}
-        <Enemy drones={drones} onDroneClick={handleDroneClick} />
+        <Enemy />
       </Box>
     </Box>
   );
