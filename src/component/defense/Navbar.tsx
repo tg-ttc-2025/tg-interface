@@ -1,16 +1,28 @@
 import { useState, useEffect } from 'react';
 import { useCamera } from '../../hooks/Camera/useCamera';
-import { AppBar, Avatar, Badge, Box, IconButton, Toolbar, Typography } from '@mui/material';
+import { AppBar, Avatar, Badge, Box, IconButton, Toolbar, Tooltip, Typography } from '@mui/material';
 import { Notifications } from '@mui/icons-material';
+import AdsClickIcon from '@mui/icons-material/AdsClick';
 import { Settings } from 'lucide-react';
+import SecurityIcon from '@mui/icons-material/Security';
+import { useNavigate } from 'react-router-dom';
 
 export default function Navbar() {
+    const navigate = useNavigate();
 
     // Credentials
     const DEFENCE_LOCATION = '02999a4a-361c-498c-a250-d5d70dd39fb8';
     const DEFENCE_TOKEN = 'df2a423f93a9c512e1bc95ec29e1c44a843c71a3676aba595c891a8ce5e785a0';
 
     const { data } = useCamera(DEFENCE_LOCATION, DEFENCE_TOKEN);
+
+    const handleNavigateToOffense = () => {
+        navigate('/offense');
+    };
+
+    const handleNavigateToDefense = () => {
+        navigate('/defense');
+    };
 
     const [currentTime, setCurrentTime] = useState(new Date());
     useEffect(() => {
@@ -76,9 +88,6 @@ export default function Navbar() {
                         }}
                     >
                         <span>{data?.name} Command Post Visualization</span>
-                        <span style={{ fontSize: '0.875rem', fontWeight: 400, opacity: 0.8, color: '#FF9913' }}>
-                            {data?.Institute}
-                        </span>
                     </Typography>
 
                     {/* System Status */}
@@ -102,15 +111,33 @@ export default function Navbar() {
                         {currentTime.toLocaleTimeString('en-US', { hour12: false })} UTC
                     </Typography>
 
-                    {/* Icons */}
-                    <IconButton sx={{ color: 'white', mr: 1, border: 2, borderRadius: '10px', bgcolor: '#404040' }}>
-                        <Settings />
-                    </IconButton>
-                    <IconButton sx={{ color: 'white', mr: 1, border: 2, borderRadius: '10px', bgcolor: '#404040' }}>
-                        <Badge badgeContent={3} color="error">
-                            <Notifications />
-                        </Badge>
-                    </IconButton>
+                    <Tooltip title="Defense Command" arrow placement="bottom">
+                        <IconButton onClick={handleNavigateToDefense} sx={{ color: 'white', mr: 1, border: 2, borderRadius: '10px', bgcolor: '#ef4444' }}>
+                            <Avatar
+                                sx={{
+                                    width: 20,
+                                    height: 20,
+                                    backgroundColor: '#ef4444',
+                                }}
+                            >
+                                <SecurityIcon sx={{ fontSize: 20 }} />
+                            </Avatar>
+                        </IconButton>
+                    </Tooltip>
+
+                    <Tooltip title="Offense Command" arrow placement="bottom">
+                        <IconButton onClick={handleNavigateToOffense} sx={{ color: 'white', mr: 1, border: 2, borderRadius: '10px', bgcolor: '#3b82f6' }}>
+                            <Avatar
+                                sx={{
+                                    width: 20,
+                                    height: 20,
+                                    backgroundColor: '#3b82f6',
+                                }}
+                            >
+                                <AdsClickIcon sx={{ fontSize: 20 }} />
+                            </Avatar>
+                        </IconButton>
+                    </Tooltip>
                     <Avatar
                         sx={{
                             width: 40,

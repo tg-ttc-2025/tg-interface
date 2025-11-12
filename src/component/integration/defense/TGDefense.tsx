@@ -1,8 +1,10 @@
-import { Box, Typography, Avatar, TextField, InputAdornment, Chip, CircularProgress } from '@mui/material';
+// src/component/integration/defense/TGDefense.tsx
+
+import { Box, Typography, Avatar, TextField, InputAdornment, Chip } from '@mui/material';
 import { Search } from '@mui/icons-material';
-import AdsClickIcon from '@mui/icons-material/AdsClick';
+import SecurityIcon from '@mui/icons-material/Security';
 import { useState, useMemo } from 'react';
-import type { DroneObject } from '../../../services/defenseDetectionService';
+import type { DroneObject } from '../../../services/tgDefenseDetectionService';
 
 interface DroneUpdate extends DroneObject {
     updateId: string;
@@ -12,9 +14,10 @@ interface DroneUpdate extends DroneObject {
 interface DefenseProps {
     allDrones: DroneUpdate[];
     onDroneClick?: (droneId: string) => void;
+    isConnected?: boolean;
 }
 
-export default function Offense({ allDrones, onDroneClick }: DefenseProps) {
+export default function TGDefense({ allDrones, onDroneClick, isConnected = false }: DefenseProps) {
     const [searchTerm, setSearchTerm] = useState('');
 
     const filteredDrones = allDrones.filter((drone) =>
@@ -49,20 +52,39 @@ export default function Offense({ allDrones, onDroneClick }: DefenseProps) {
             white: '#f9fafb',
             orange: '#f97316',
         };
-        return colorMap[color.toLowerCase()] || '#3b82f6';
+        return colorMap[color.toLowerCase()] || '#ef4444';
     };
 
-    const getImageUrl = (imagePath?: string): string => {
-        if (!imagePath) return '';
-        if (imagePath.startsWith('/api')) {
-            return `https://tesa-api.crma.dev${imagePath}`;
-        }
+// Assuming this is within a frontend framework like React (Vite/CRA)
+// and these environment variables are defined in your .env file
+const getImageUrl = (imagePath?: string): string => {
+    if (!imagePath) return '';
+    
+    // 1. If it's already a full URL (e.g., from a pre-signed URL response), return it
+    if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
         return imagePath;
-    };
+    }
+    
+    // 2. Define configuration from environment variables
+    const minioUrl = import.meta.env.VITE_MINIO_URL || 'http://localhost:9000';
+    const bucketName = import.meta.env.VITE_MINIO_BUCKET || 'tg-detections';
+
+    // 3. Construct the direct public path using the path-style URL format:
+    //    {MINIO_URL}/{BUCKET_NAME}/{PATH_IN_BUCKET}
+    return `${minioUrl}/${bucketName}/${imagePath}`;
+};
 
     const isRecentlyUpdated = (drone: DroneUpdate): boolean => {
         if (!drone.lastUpdated) return false;
-        return Date.now() - drone.lastUpdated < 3000;
+        return Date.now() - drone.lastUpdated < 3000; // 3 seconds
+    };
+
+    const formatSpeed = (speed: number | string): string => {
+        if (typeof speed === 'number') {
+            return `${speed.toFixed(1)}`;
+        }
+        // If speed is already a string with units, return as is
+        return speed.toString();
     };
 
     return (
@@ -81,8 +103,8 @@ export default function Offense({ allDrones, onDroneClick }: DefenseProps) {
             {/* Header */}
             <Box
                 sx={{
-                    borderLeft: '8px solid #3b82f6',
-                    bgcolor: '#0f172a',
+                    borderLeft: '8px solid #dc2626',
+                    bgcolor: '#2A1716',
                     padding: 3,
                     borderBottom: '2px solid #404040',
                 }}
@@ -92,10 +114,10 @@ export default function Offense({ allDrones, onDroneClick }: DefenseProps) {
                         sx={{
                             width: 50,
                             height: 50,
-                            backgroundColor: '#3b82f6',
+                            backgroundColor: '#dc2626',
                         }}
                     >
-                        <AdsClickIcon sx={{ fontSize: 30 }} />
+                        <SecurityIcon sx={{ fontSize: 30 }} />
                     </Avatar>
                     <Box sx={{ flex: 1 }}>
                         <Typography
@@ -108,27 +130,32 @@ export default function Offense({ allDrones, onDroneClick }: DefenseProps) {
                                 letterSpacing: '0.5px',
                             }}
                         >
-                            OFFENSE
+                            LIVE FEED
                         </Typography>
                         <Typography
                             variant="body2"
                             sx={{
-                                color: '#60a5fa',
+                                color: '#f87171',
                                 fontSize: '0.75rem',
                                 fontWeight: 500,
                             }}
                         >
-                            OUR DRONES
+                            REAL-TIME ONLY
                         </Typography>
                     </Box>
                     <Chip
-                        label="LIVE"
+                        label={isConnected ? "LIVE" : "OFFLINE"}
                         size="small"
                         sx={{
-                            backgroundColor: '#22c55e',
+                            backgroundColor: isConnected ? '#22c55e' : '#6b7280',
                             color: 'white',
                             fontWeight: 600,
                             fontSize: '0.7rem',
+                            animation: isConnected ? 'pulse 2s infinite' : 'none',
+                            '@keyframes pulse': {
+                                '0%, 100%': { opacity: 1 },
+                                '50%': { opacity: 0.7 },
+                            }
                         }}
                     />
                 </Box>
@@ -138,7 +165,7 @@ export default function Offense({ allDrones, onDroneClick }: DefenseProps) {
             <Box sx={{ padding: 2 }}>
                 <TextField
                     fullWidth
-                    placeholder="Search drones..."
+                    placeholder="Search by ID, color, or objective..."
                     size="small"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
@@ -156,10 +183,10 @@ export default function Offense({ allDrones, onDroneClick }: DefenseProps) {
                                 borderColor: 'rgba(255, 255, 255, 0.1)',
                             },
                             '&:hover .MuiOutlinedInput-notchedOutline': {
-                                borderColor: 'rgba(59, 130, 246, 0.5)',
+                                borderColor: 'rgba(220, 38, 38, 0.5)',
                             },
                             '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                                borderColor: '#3b82f6',
+                                borderColor: '#dc2626',
                             },
                         },
                     }}
@@ -179,8 +206,8 @@ export default function Offense({ allDrones, onDroneClick }: DefenseProps) {
                 <Box
                     sx={{
                         flex: 1,
-                        backgroundColor: 'rgba(59, 130, 246, 0.15)',
-                        border: '1px solid rgba(59, 130, 246, 0.3)',
+                        backgroundColor: 'rgba(220, 38, 38, 0.15)',
+                        border: '1px solid rgba(220, 38, 38, 0.3)',
                         borderRadius: '8px',
                         padding: 1.5,
                         display: 'flex',
@@ -198,11 +225,11 @@ export default function Offense({ allDrones, onDroneClick }: DefenseProps) {
                             mb: 0.5,
                         }}
                     >
-                        Drones
+                        Objects
                     </Typography>
                     <Typography 
                         sx={{ 
-                            color: '#3b82f6', 
+                            color: '#dc2626', 
                             fontSize: '1.5rem',
                             fontWeight: 700,
                             lineHeight: 1,
@@ -235,7 +262,7 @@ export default function Offense({ allDrones, onDroneClick }: DefenseProps) {
                             mb: 0.5,
                         }}
                     >
-                        Updates
+                        Detections
                     </Typography>
                     <Typography 
                         sx={{ 
@@ -253,8 +280,8 @@ export default function Offense({ allDrones, onDroneClick }: DefenseProps) {
                 <Box
                     sx={{
                         flex: 1,
-                        backgroundColor: 'rgba(96, 165, 250, 0.15)',
-                        border: '1px solid rgba(96, 165, 250, 0.3)',
+                        backgroundColor: 'rgba(59, 130, 246, 0.15)',
+                        border: '1px solid rgba(59, 130, 246, 0.3)',
                         borderRadius: '8px',
                         padding: 1.5,
                         display: 'flex',
@@ -272,11 +299,11 @@ export default function Offense({ allDrones, onDroneClick }: DefenseProps) {
                             mb: 0.5,
                         }}
                     >
-                        Avg
+                        Avg/Obj
                     </Typography>
                     <Typography 
                         sx={{ 
-                            color: '#60a5fa', 
+                            color: '#3b82f6', 
                             fontSize: '1.5rem',
                             fontWeight: 700,
                             lineHeight: 1,
@@ -300,23 +327,44 @@ export default function Offense({ allDrones, onDroneClick }: DefenseProps) {
                         backgroundColor: 'rgba(255, 255, 255, 0.05)',
                     },
                     '&::-webkit-scrollbar-thumb': {
-                        backgroundColor: '#3b82f6',
+                        backgroundColor: '#dc2626',
                         borderRadius: '4px',
-                    },
-                    '&::-webkit-scrollbar-thumb:hover': {
-                        backgroundColor: '#2563eb',
                     },
                 }}
             >
                 {filteredDrones.length === 0 && (
-                    <Typography sx={{ color: 'rgba(255, 255, 255, 0.5)', textAlign: 'center', mt: 4 }}>
-                        No drones detected
-                    </Typography>
+                    <Box sx={{ 
+                        textAlign: 'center', 
+                        mt: 8,
+                        p: 4,
+                    }}>
+                        <Typography sx={{ 
+                            color: 'rgba(255, 255, 255, 0.3)', 
+                            fontSize: '3rem',
+                            mb: 2,
+                        }}>
+                            📡
+                        </Typography>
+                        <Typography sx={{ 
+                            color: 'rgba(255, 255, 255, 0.5)', 
+                            fontSize: '1rem',
+                            fontWeight: 600,
+                            mb: 1,
+                        }}>
+                            No Detections
+                        </Typography>
+                        <Typography sx={{ 
+                            color: 'rgba(255, 255, 255, 0.3)', 
+                            fontSize: '0.85rem',
+                        }}>
+                            Waiting for offense detections...
+                        </Typography>
+                    </Box>
                 )}
 
                 {filteredDrones.map((drone) => {
                     const droneColor = getColorHex(drone.details.color);
-                    const imageUrl = getImageUrl((drone as any).image?.path);
+                    const imageUrl = drone.image?.publicUrl;
                     const recentlyUpdated = isRecentlyUpdated(drone);
                     
                     return (
@@ -325,9 +373,9 @@ export default function Offense({ allDrones, onDroneClick }: DefenseProps) {
                             onClick={() => handleDroneCardClick(drone.obj_id)}
                             sx={{
                                 backgroundColor: recentlyUpdated 
-                                    ? 'rgba(59, 130, 246, 0.25)' 
-                                    : 'rgba(59, 130, 246, 0.1)',
-                                border: `1px solid ${recentlyUpdated ? 'rgba(59, 130, 246, 0.6)' : 'rgba(59, 130, 246, 0.3)'}`,
+                                    ? 'rgba(220, 38, 38, 0.25)' 
+                                    : 'rgba(220, 38, 38, 0.1)',
+                                border: `1px solid ${recentlyUpdated ? 'rgba(220, 38, 38, 0.6)' : 'rgba(220, 38, 38, 0.3)'}`,
                                 borderLeft: `4px solid ${droneColor}`,
                                 borderRadius: '8px',
                                 padding: 2,
@@ -356,8 +404,8 @@ export default function Offense({ allDrones, onDroneClick }: DefenseProps) {
                                     },
                                 },
                                 '&:hover': {
-                                    backgroundColor: 'rgba(59, 130, 246, 0.2)',
-                                    border: '1px solid rgba(59, 130, 246, 0.5)',
+                                    backgroundColor: 'rgba(220, 38, 38, 0.2)',
+                                    border: '1px solid rgba(220, 38, 38, 0.5)',
                                     borderLeft: `4px solid ${droneColor}`,
                                     transform: 'translateX(4px)',
                                     boxShadow: `0 0 20px ${droneColor}40`,
@@ -380,7 +428,7 @@ export default function Offense({ allDrones, onDroneClick }: DefenseProps) {
                                         textTransform: 'uppercase',
                                     }}
                                 >
-                                    New Update
+                                    NEW
                                 </Box>
                             )}
 
@@ -393,34 +441,38 @@ export default function Offense({ allDrones, onDroneClick }: DefenseProps) {
                                         overflow: 'hidden',
                                         mb: 1.5,
                                         position: 'relative',
+                                        backgroundColor: 'rgba(0, 0, 0, 0.3)',
                                     }}
                                 >
                                     <img
                                         src={imageUrl}
-                                        alt={`Drone ${drone.obj_id}`}
+                                        alt={`Detection ${drone.obj_id}`}
                                         style={{
                                             width: '100%',
                                             height: '100%',
                                             objectFit: 'cover',
                                         }}
                                         onError={(e) => {
-                                            (e.target as HTMLElement).style.display = 'none';
+                                            const target = e.target as HTMLImageElement;
+                                            target.style.display = 'none';
+                                            console.warn('Failed to load image:', imageUrl);
                                         }}
                                     />
                                     <Box
                                         sx={{
                                             position: 'absolute',
-                                            bottom: 4,
+                                            top: 4,
                                             right: 4,
                                             backgroundColor: 'rgba(0,0,0,0.7)',
-                                            color: 'white',
+                                            color: '#22c55e',
                                             fontSize: '0.6rem',
                                             fontWeight: 600,
                                             padding: '2px 6px',
                                             borderRadius: '4px',
+                                            border: '1px solid #22c55e',
                                         }}
                                     >
-                                        LIVE
+                                        📸 IMAGE
                                     </Box>
                                 </Box>
                             )}
@@ -446,18 +498,21 @@ export default function Offense({ allDrones, onDroneClick }: DefenseProps) {
                                     Click to locate →
                                 </Typography>
                             </Box>
+                            
                             <Typography sx={{ color: 'rgba(255, 255, 255, 0.7)', fontSize: '0.85rem', mb: 0.5 }}>
-                                📍 {drone.lat.toFixed(6)}, {drone.lng.toFixed(6)}
+                                📍 {Number(drone.lat).toFixed(6)}, {Number(drone.lng).toFixed(6)}
                             </Typography>
+                            
                             <Typography sx={{ color: 'rgba(255, 255, 255, 0.7)', fontSize: '0.85rem', mb: 1 }}>
-                                🚀 {drone.details.speed} m/s | {drone.size}
+                                🚀 {formatSpeed(drone.details.speed)} m/s | {drone.size || 'medium'}
                             </Typography>
+                            
                             <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
                                 <Chip
                                     label={drone.objective}
                                     size="small"
                                     sx={{
-                                        backgroundColor: drone.objective.toLowerCase() === 'kill' ? '#dc2626' : '#3b82f6',
+                                        backgroundColor: drone.objective.toLowerCase() === 'kill' ? '#dc2626' : '#f59e0b',
                                         color: 'white',
                                         fontSize: '0.7rem',
                                         fontWeight: 600,
@@ -474,7 +529,7 @@ export default function Offense({ allDrones, onDroneClick }: DefenseProps) {
                                     }}
                                 />
                                 <Chip
-                                    label={drone.type}
+                                    label={drone.type.toUpperCase()}
                                     size="small"
                                     sx={{
                                         backgroundColor: 'rgba(255, 255, 255, 0.1)',

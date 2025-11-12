@@ -4,7 +4,6 @@ import 'mapbox-gl/dist/mapbox-gl.css';
 
 mapboxgl.accessToken = 'pk.eyJ1IjoiY2hhdGNoYWxlcm0iLCJhIjoiY21nZnpiYzU3MGRzdTJrczlkd3RxamN4YyJ9.k288gnCNLdLgczawiB79gQ';
 
-// --- UPDATED INTERFACE ---
 interface DroneData {
   obj_id: string;
   type: string;
@@ -17,7 +16,7 @@ interface DroneData {
     speed: number;
   };
   image?: {
-    publicUrl: string;
+    path: string;
     filename: string;
   };
 }
@@ -42,7 +41,7 @@ interface MapProps {
   onMapMove?: (lng: number, lat: number, zoom: number) => void;
 }
 
-export default function MapComponent({ 
+export default function MapOffenseComponent({ 
   center, 
   zoom, 
   drones = [], 
@@ -82,11 +81,12 @@ export default function MapComponent({
     return colorMap[color.toLowerCase()] || '#ef4444';
   };
 
-  // --- SIMPLIFIED GET IMAGE URL ---
-  // Since the URL is now fully qualified in the DroneData object (publicUrl), 
-  // this function simply returns the provided URL.
-  const getImageUrl = (publicUrl?: string): string => {
-    return publicUrl || '';
+  const getImageUrl = (imagePath?: string): string => {
+    if (!imagePath) return '';
+    if (imagePath.startsWith('/api')) {
+      return `https://tesa-api.crma.dev${imagePath}`;
+    }
+    return imagePath;
   };
 
   const createTrailMarkerElement = (color: string, index: number): HTMLDivElement => {
@@ -414,8 +414,7 @@ export default function MapComponent({
 
   const createPopupHTML = (drone: DroneData): string => {
     const droneColor = getColorHex(drone.details.color);
-    // --- UPDATED USAGE ---
-    const imageUrl = getImageUrl(drone.image?.publicUrl);
+    const imageUrl = getImageUrl(drone.image?.path);
     
     return `
       <div style="
@@ -436,7 +435,7 @@ export default function MapComponent({
             position: relative;
           ">
             <img 
-              src="${drone.image?.publicUrl}" 
+              src="${imageUrl}" 
               alt="Drone Detection"
               style="
                 width: 100%;
@@ -519,7 +518,7 @@ export default function MapComponent({
                   display: inline-block;
                   width: 10px;
                   height: 10px;
-                  background-color ${droneColor};
+                  background-color: ${droneColor};
                   border-radius: 50%;
                   border: 1px solid rgba(255,255,255,0.3);
                 "></span>
@@ -730,10 +729,9 @@ export default function MapComponent({
           Number(existingMarkerData.lastLng) !== Number(drone.lng);
 
         const colorChanged = existingMarkerData.color !== currentColor;
-        // --- UPDATED USAGE ---
-        const imageUrl = getImageUrl(drone.image?.publicUrl);
-        const storedImageUrl = existingMarkerData.popup.getElement()?.dataset.imageUrl;
-        const imageChanged = imageUrl !== storedImageUrl;
+        const imageUrl = getImageUrl(drone.image?.path);
+        const storedImagePath = existingMarkerData.popup.getElement()?.dataset.imagePath;
+        const imageChanged = imageUrl !== storedImagePath;
 
         if (colorChanged || imageChanged) {
           console.log('🔄 Recreating marker due to color/image change');
@@ -788,10 +786,9 @@ export default function MapComponent({
       className: 'drone-popup'
     }).setHTML(createPopupHTML(drone));
 
-    // --- UPDATED USAGE for data attribute ---
     const popupElement = popup.getElement();
     if (popupElement) {
-      popupElement.dataset.imageUrl = getImageUrl(drone.image?.publicUrl);
+      popupElement.dataset.imagePath = getImageUrl(drone.image?.path);
     }
 
     marker.setPopup(popup);

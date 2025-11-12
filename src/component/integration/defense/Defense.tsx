@@ -1,80 +1,35 @@
 import { Box, Typography, Avatar, TextField, InputAdornment, Chip, CircularProgress } from '@mui/material';
 import { Search } from '@mui/icons-material';
 import SecurityIcon from '@mui/icons-material/Security';
-import { useState, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import type { DroneObject } from '../../../services/defenseDetectionService';
-import { useSocket } from '../../../hooks/Socket/useSocket';
-import { useDetections } from '../../../hooks/Defense/useDefenseDetection';
+
+interface DroneUpdate extends DroneObject {
+    updateId: string;
+    lastUpdated: number;
+}
 
 interface DefenseProps {
+    allDrones: DroneUpdate[];
     onDroneClick?: (droneId: string) => void;
 }
 
-export default function Defense({ onDroneClick }: DefenseProps) {
-    const DEFENCE_LOCATION = '02999a4a-361c-498c-a250-d5d70dd39fb8';
-    const DEFENCE_TOKEN = 'df2a423f93a9c512e1bc95ec29e1c44a843c71a3676aba595c891a8ce5e785a0';
-
-    const [allDetections, setAllDetections] = useState<DroneObject[]>([]);
+export default function Defense({ allDrones, onDroneClick }: DefenseProps) {
     const [searchTerm, setSearchTerm] = useState('');
-    const [isStarted, setIsStarted] = useState(true);
 
-    const { data: historyData, isLoading, error } = useDetections(
-        DEFENCE_LOCATION, 
-        DEFENCE_TOKEN, 
-        isStarted
-    );
-
-    const { realtimeData, isConnected } = useSocket(DEFENCE_LOCATION, isStarted);
-
-    // Initialize with historical data
-    useEffect(() => {
-        if (historyData?.objects) {
-            setAllDetections(historyData.objects);
-        }
-    }, [historyData]);
-
-    // Handle real-time updates - UPDATE existing drones or ADD new ones
-    useEffect(() => {
-        if (realtimeData?.objects) {
-            setAllDetections((prev) => {
-                const updated = [...prev];
-                
-                realtimeData.objects.forEach((newDrone) => {
-                    const existingIndex = updated.findIndex(
-                        (drone) => drone.obj_id === newDrone.obj_id
-                    );
-                    
-                    if (existingIndex !== -1) {
-                        // Update existing drone - preserve position in array but update data
-                        updated[existingIndex] = {
-                            ...newDrone,
-                            // Add timestamp for tracking updates
-                            lastUpdated: Date.now()
-                        };
-                    } else {
-                        // Add new drone at the beginning
-                        updated.unshift({
-                            ...newDrone,
-                            lastUpdated: Date.now()
-                        });
-                    }
-                });
-                
-                // Sort by last updated (most recent first)
-                return updated.sort((a, b) => {
-                    const aTime = (a as any).lastUpdated || 0;
-                    const bTime = (b as any).lastUpdated || 0;
-                    return bTime - aTime;
-                });
-            });
-        }
-    }, [realtimeData]);
-
-    const filteredDrones = allDetections.filter((drone) =>
+    const filteredDrones = allDrones.filter((drone) =>
         drone.obj_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
         drone.details.color.toLowerCase().includes(searchTerm.toLowerCase()) ||
         drone.objective.toLowerCase().includes(searchTerm.toLowerCase())
     );
+
+    // Calculate statistics
+    const uniqueDronesCount = useMemo(() => {
+        return new Set(filteredDrones.map(d => d.obj_id)).size;
+    }, [filteredDrones]);
+
+    const totalUpdatesCount = filteredDrones.length;
+    const avgUpdatesPerDrone = uniqueDronesCount > 0 ? Math.round(totalUpdatesCount / uniqueDronesCount) : 0;
 
     const handleDroneCardClick = (droneId: string) => {
         if (onDroneClick) {
@@ -105,8 +60,7 @@ export default function Defense({ onDroneClick }: DefenseProps) {
         return imagePath;
     };
 
-    // Check if drone was recently updated (within last 3 seconds)
-    const isRecentlyUpdated = (drone: any): boolean => {
+    const isRecentlyUpdated = (drone: DroneUpdate): boolean => {
         if (!drone.lastUpdated) return false;
         return Date.now() - drone.lastUpdated < 3000;
     };
@@ -168,10 +122,10 @@ export default function Defense({ onDroneClick }: DefenseProps) {
                         </Typography>
                     </Box>
                     <Chip
-                        label={isConnected ? 'LIVE' : 'OFFLINE'}
+                        label="LIVE"
                         size="small"
                         sx={{
-                            backgroundColor: isConnected ? '#22c55e' : '#6b7280',
+                            backgroundColor: '#22c55e',
                             color: 'white',
                             fontWeight: 600,
                             fontSize: '0.7rem',
@@ -212,11 +166,125 @@ export default function Defense({ onDroneClick }: DefenseProps) {
                 />
             </Box>
 
-            {/* Drone Count */}
-            <Box sx={{ px: 2, pb: 1 }}>
-                <Typography sx={{ color: 'rgba(255, 255, 255, 0.7)', fontSize: '0.85rem' }}>
-                    Detected: <strong style={{ color: '#dc2626' }}>{filteredDrones.length}</strong> drones
-                </Typography>
+            {/* Statistics Bar */}
+            <Box 
+                sx={{ 
+                    px: 2, 
+                    pb: 2,
+                    display: 'flex',
+                    gap: 1.5,
+                }}
+            >
+                {/* Total Drones */}
+                <Box
+                    sx={{
+                        flex: 1,
+                        backgroundColor: 'rgba(220, 38, 38, 0.15)',
+                        border: '1px solid rgba(220, 38, 38, 0.3)',
+                        borderRadius: '8px',
+                        padding: 1.5,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                    }}
+                >
+                    <Typography 
+                        sx={{ 
+                            color: 'rgba(255, 255, 255, 0.6)', 
+                            fontSize: '0.65rem',
+                            fontWeight: 600,
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.5px',
+                            mb: 0.5,
+                        }}
+                    >
+                        Drones
+                    </Typography>
+                    <Typography 
+                        sx={{ 
+                            color: '#dc2626', 
+                            fontSize: '1.5rem',
+                            fontWeight: 700,
+                            lineHeight: 1,
+                        }}
+                    >
+                        {uniqueDronesCount}
+                    </Typography>
+                </Box>
+
+                {/* Total Updates */}
+                <Box
+                    sx={{
+                        flex: 1,
+                        backgroundColor: 'rgba(34, 197, 94, 0.15)',
+                        border: '1px solid rgba(34, 197, 94, 0.3)',
+                        borderRadius: '8px',
+                        padding: 1.5,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                    }}
+                >
+                    <Typography 
+                        sx={{ 
+                            color: 'rgba(255, 255, 255, 0.6)', 
+                            fontSize: '0.65rem',
+                            fontWeight: 600,
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.5px',
+                            mb: 0.5,
+                        }}
+                    >
+                        Updates
+                    </Typography>
+                    <Typography 
+                        sx={{ 
+                            color: '#22c55e', 
+                            fontSize: '1.5rem',
+                            fontWeight: 700,
+                            lineHeight: 1,
+                        }}
+                    >
+                        {totalUpdatesCount}
+                    </Typography>
+                </Box>
+
+                {/* Average Updates */}
+                <Box
+                    sx={{
+                        flex: 1,
+                        backgroundColor: 'rgba(59, 130, 246, 0.15)',
+                        border: '1px solid rgba(59, 130, 246, 0.3)',
+                        borderRadius: '8px',
+                        padding: 1.5,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                    }}
+                >
+                    <Typography 
+                        sx={{ 
+                            color: 'rgba(255, 255, 255, 0.6)', 
+                            fontSize: '0.65rem',
+                            fontWeight: 600,
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.5px',
+                            mb: 0.5,
+                        }}
+                    >
+                        Avg
+                    </Typography>
+                    <Typography 
+                        sx={{ 
+                            color: '#3b82f6', 
+                            fontSize: '1.5rem',
+                            fontWeight: 700,
+                            lineHeight: 1,
+                        }}
+                    >
+                        {avgUpdatesPerDrone}
+                    </Typography>
+                </Box>
             </Box>
 
             {/* Content Area */}
@@ -237,8 +305,7 @@ export default function Defense({ onDroneClick }: DefenseProps) {
                     },
                 }}
             >
-
-                {!isLoading && filteredDrones.length === 0 && (
+                {filteredDrones.length === 0 && (
                     <Typography sx={{ color: 'rgba(255, 255, 255, 0.5)', textAlign: 'center', mt: 4 }}>
                         No enemy drones detected
                     </Typography>
@@ -251,7 +318,7 @@ export default function Defense({ onDroneClick }: DefenseProps) {
                     
                     return (
                         <Box
-                            key={drone.obj_id}
+                            key={drone.updateId}
                             onClick={() => handleDroneCardClick(drone.obj_id)}
                             sx={{
                                 backgroundColor: recentlyUpdated 
@@ -266,7 +333,17 @@ export default function Defense({ onDroneClick }: DefenseProps) {
                                 position: 'relative',
                                 overflow: 'hidden',
                                 transition: 'all 0.3s ease',
-                                animation: recentlyUpdated ? 'pulse 1s ease-in-out' : 'none',
+                                animation: recentlyUpdated ? 'slideIn 0.5s ease-out, pulse 1s ease-in-out' : 'none',
+                                '@keyframes slideIn': {
+                                    '0%': {
+                                        transform: 'translateX(-100%)',
+                                        opacity: 0,
+                                    },
+                                    '100%': {
+                                        transform: 'translateX(0)',
+                                        opacity: 1,
+                                    },
+                                },
                                 '@keyframes pulse': {
                                     '0%, 100%': {
                                         opacity: 1,
@@ -288,7 +365,7 @@ export default function Defense({ onDroneClick }: DefenseProps) {
                                 <Box
                                     sx={{
                                         position: 'absolute',
-                                        zIndex:1000,
+                                        zIndex: 1000,
                                         top: 8,
                                         right: 8,
                                         backgroundColor: '#22c55e',
@@ -300,11 +377,10 @@ export default function Defense({ onDroneClick }: DefenseProps) {
                                         textTransform: 'uppercase',
                                     }}
                                 >
-                                    Updated
+                                    New Update
                                 </Box>
                             )}
 
-                            {/* Drone Image Thumbnail */}
                             {imageUrl && (
                                 <Box
                                     sx={{

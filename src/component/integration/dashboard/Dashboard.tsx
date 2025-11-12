@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { Box, AppBar, Toolbar, Typography, IconButton, Avatar, Badge } from '@mui/material';
 import { Settings, Notifications } from '@mui/icons-material';
-import Allies from '../offense/Offense';
-import Enemy from '../defense/Defense';
 import MapComponent from '../../map/MapComponent';
 import { useCamera } from '../../../hooks/Camera/useCamera';
+import Defense from '../defense/Defense';
+import Offense from '../offense/Offense';
 
 interface DroneData {
   id: number;
@@ -225,7 +225,7 @@ export default function Dashboard() {
               letterSpacing: '1px',
             }}
           >
-            TTC Command Post Visualization
+            TTC Command Post Visualization"
           </Typography>
 
           {/* System Status */}
@@ -278,8 +278,8 @@ export default function Dashboard() {
           padding: 0,
         }}
       >
-        {/* Left Panel - Allies */}
-        <Allies />
+        {/* Left Panel - Allies
+        <Offense /> */}
 
         {/* Center - Map */}
         <Box sx={{ flex: 1, position: 'relative', margin: 0, padding: 0 }}>
@@ -291,7 +291,10 @@ export default function Dashboard() {
         </Box>
 
         {/* Right Panel - Enemy */}
-        <Enemy />
+          {/* <Defense 
+                        allDrones={allDrones}
+                        onDroneClick={handleDroneClick}
+                    /> */}
       </Box>
     </Box>
   );
