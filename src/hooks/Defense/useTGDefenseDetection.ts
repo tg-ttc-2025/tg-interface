@@ -2,7 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { tgDefenseService } from '../../services/tgDefenseDetectionService';
-import type { DroneObject } from '../../services/tgDefenseDetectionService';
+import type { DroneObject } from '../../types/drone.type';
 
 export const useTGDetections = (
   enabled: boolean = true,

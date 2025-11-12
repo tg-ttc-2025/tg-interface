@@ -1,15 +1,11 @@
-// src/component/integration/defense/TGDefense.tsx
-
 import { Box, Typography, Avatar, TextField, InputAdornment, Chip } from '@mui/material';
 import { Search } from '@mui/icons-material';
 import SecurityIcon from '@mui/icons-material/Security';
 import { useState, useMemo } from 'react';
-import type { DroneObject } from '../../../services/tgDefenseDetectionService';
-
-interface DroneUpdate extends DroneObject {
-    updateId: string;
-    lastUpdated: number;
-}
+import GpsFixedIcon from '@mui/icons-material/GpsFixed';
+import SpeedIcon from '@mui/icons-material/Speed';
+import type { DroneUpdate } from '../../../types/drone.type';
+import HeightIcon from '@mui/icons-material/Height';
 
 interface DefenseProps {
     allDrones: DroneUpdate[];
@@ -26,7 +22,6 @@ export default function TGDefense({ allDrones, onDroneClick, isConnected = false
         drone.objective.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
-    // Calculate statistics
     const uniqueDronesCount = useMemo(() => {
         return new Set(filteredDrones.map(d => d.obj_id)).size;
     }, [filteredDrones]);
@@ -55,35 +50,16 @@ export default function TGDefense({ allDrones, onDroneClick, isConnected = false
         return colorMap[color.toLowerCase()] || '#ef4444';
     };
 
-// Assuming this is within a frontend framework like React (Vite/CRA)
-// and these environment variables are defined in your .env file
-const getImageUrl = (imagePath?: string): string => {
-    if (!imagePath) return '';
-    
-    // 1. If it's already a full URL (e.g., from a pre-signed URL response), return it
-    if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
-        return imagePath;
-    }
-    
-    // 2. Define configuration from environment variables
-    const minioUrl = import.meta.env.VITE_MINIO_URL || 'http://localhost:9000';
-    const bucketName = import.meta.env.VITE_MINIO_BUCKET || 'tg-detections';
-
-    // 3. Construct the direct public path using the path-style URL format:
-    //    {MINIO_URL}/{BUCKET_NAME}/{PATH_IN_BUCKET}
-    return `${minioUrl}/${bucketName}/${imagePath}`;
-};
-
     const isRecentlyUpdated = (drone: DroneUpdate): boolean => {
         if (!drone.lastUpdated) return false;
-        return Date.now() - drone.lastUpdated < 3000; // 3 seconds
+        return Date.now() - drone.lastUpdated < 3000;
     };
 
     const formatSpeed = (speed: number | string): string => {
         if (typeof speed === 'number') {
             return `${speed.toFixed(1)}`;
         }
-        // If speed is already a string with units, return as is
+
         return speed.toString();
     };
 
@@ -105,7 +81,8 @@ const getImageUrl = (imagePath?: string): string => {
                 sx={{
                     borderLeft: '8px solid #dc2626',
                     bgcolor: '#2A1716',
-                    padding: 3,
+                    paddingY: 2,
+                    paddingX: 4,
                     borderBottom: '2px solid #404040',
                 }}
             >
@@ -130,7 +107,7 @@ const getImageUrl = (imagePath?: string): string => {
                                 letterSpacing: '0.5px',
                             }}
                         >
-                            LIVE FEED
+                            DEFENCE
                         </Typography>
                         <Typography
                             variant="body2"
@@ -140,7 +117,7 @@ const getImageUrl = (imagePath?: string): string => {
                                 fontWeight: 500,
                             }}
                         >
-                            REAL-TIME ONLY
+                            DETECT DRONES
                         </Typography>
                     </Box>
                     <Chip
@@ -154,7 +131,7 @@ const getImageUrl = (imagePath?: string): string => {
                             animation: isConnected ? 'pulse 2s infinite' : 'none',
                             '@keyframes pulse': {
                                 '0%, 100%': { opacity: 1 },
-                                '50%': { opacity: 0.7 },
+                                '20%': { opacity: 0.7 },
                             }
                         }}
                     />
@@ -162,23 +139,26 @@ const getImageUrl = (imagePath?: string): string => {
             </Box>
 
             {/* Search Bar */}
-            <Box sx={{ padding: 2 }}>
+            <Box sx={{ marginTop:1, marginBottom:1}}>
                 <TextField
                     fullWidth
                     placeholder="Search by ID, color, or objective..."
-                    size="small"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     InputProps={{
                         startAdornment: (
                             <InputAdornment position="start">
-                                <Search sx={{ color: 'rgba(255, 255, 255, 0.5)' }} />
+                                <Search sx={{ color: 'rgba(255, 255, 255, 0.5)', fontSize: '1.1rem' }} />
                             </InputAdornment>
                         ),
                         sx: {
                             backgroundColor: 'rgba(255, 255, 255, 0.05)',
                             color: 'white',
-                            borderRadius: '8px',
+                            borderRadius: '0px',
+                            '& .MuiInputBase-input': {
+                                padding: '6px 10px',
+                                fontSize: '0.8rem', 
+                            },
                             '& .MuiOutlinedInput-notchedOutline': {
                                 borderColor: 'rgba(255, 255, 255, 0.1)',
                             },
@@ -192,23 +172,35 @@ const getImageUrl = (imagePath?: string): string => {
                     }}
                 />
             </Box>
+            <Typography color={'white'} 
+                    sx={{ 
+                        px: 0.5, 
+                        pb: 1,
+                        display: 'flex',
+                        gap: 1.5,
+                        fontWeight: 700,
+                        fontSize: '0.8rem',
+                    }}>
+                REALTIME DETECTION FEED
+            </Typography>
 
             {/* Statistics Bar */}
             <Box 
                 sx={{ 
-                    px: 2, 
-                    pb: 2,
+                    px: 5, 
+                    pb: 5,
                     display: 'flex',
-                    gap: 1.5,
+                    gap: 2,
+                    mb: -2
                 }}
             >
+
                 {/* Total Drones */}
                 <Box
                     sx={{
                         flex: 1,
-                        backgroundColor: 'rgba(220, 38, 38, 0.15)',
+                        backgroundColor: '',
                         border: '1px solid rgba(220, 38, 38, 0.3)',
-                        borderRadius: '8px',
                         padding: 1.5,
                         display: 'flex',
                         flexDirection: 'column',
@@ -217,9 +209,9 @@ const getImageUrl = (imagePath?: string): string => {
                 >
                     <Typography 
                         sx={{ 
-                            color: 'rgba(255, 255, 255, 0.6)', 
+                            color: '#dc2626', 
                             fontSize: '0.65rem',
-                            fontWeight: 600,
+                            fontWeight: 800,
                             textTransform: 'uppercase',
                             letterSpacing: '0.5px',
                             mb: 0.5,
@@ -243,9 +235,8 @@ const getImageUrl = (imagePath?: string): string => {
                 <Box
                     sx={{
                         flex: 1,
-                        backgroundColor: 'rgba(34, 197, 94, 0.15)',
+                        backgroundColor: '',
                         border: '1px solid rgba(34, 197, 94, 0.3)',
-                        borderRadius: '8px',
                         padding: 1.5,
                         display: 'flex',
                         flexDirection: 'column',
@@ -254,7 +245,7 @@ const getImageUrl = (imagePath?: string): string => {
                 >
                     <Typography 
                         sx={{ 
-                            color: 'rgba(255, 255, 255, 0.6)', 
+                            color: '#22c55e', 
                             fontSize: '0.65rem',
                             fontWeight: 600,
                             textTransform: 'uppercase',
@@ -268,7 +259,7 @@ const getImageUrl = (imagePath?: string): string => {
                         sx={{ 
                             color: '#22c55e', 
                             fontSize: '1.5rem',
-                            fontWeight: 700,
+                            fontWeight: 800,
                             lineHeight: 1,
                         }}
                     >
@@ -280,9 +271,8 @@ const getImageUrl = (imagePath?: string): string => {
                 <Box
                     sx={{
                         flex: 1,
-                        backgroundColor: 'rgba(59, 130, 246, 0.15)',
+                        backgroundColor: '',
                         border: '1px solid rgba(59, 130, 246, 0.3)',
-                        borderRadius: '8px',
                         padding: 1.5,
                         display: 'flex',
                         flexDirection: 'column',
@@ -291,7 +281,7 @@ const getImageUrl = (imagePath?: string): string => {
                 >
                     <Typography 
                         sx={{ 
-                            color: 'rgba(255, 255, 255, 0.6)', 
+                            color: '#3b82f6', 
                             fontSize: '0.65rem',
                             fontWeight: 600,
                             textTransform: 'uppercase',
@@ -413,7 +403,7 @@ const getImageUrl = (imagePath?: string): string => {
                             }}
                         >
                             {recentlyUpdated && (
-                                <Box
+                                <Typography
                                     sx={{
                                         position: 'absolute',
                                         zIndex: 1000,
@@ -429,7 +419,7 @@ const getImageUrl = (imagePath?: string): string => {
                                     }}
                                 >
                                     NEW
-                                </Box>
+                                </Typography>
                             )}
 
                             {imageUrl && (
@@ -458,22 +448,6 @@ const getImageUrl = (imagePath?: string): string => {
                                             console.warn('Failed to load image:', imageUrl);
                                         }}
                                     />
-                                    <Box
-                                        sx={{
-                                            position: 'absolute',
-                                            top: 4,
-                                            right: 4,
-                                            backgroundColor: 'rgba(0,0,0,0.7)',
-                                            color: '#22c55e',
-                                            fontSize: '0.6rem',
-                                            fontWeight: 600,
-                                            padding: '2px 6px',
-                                            borderRadius: '4px',
-                                            border: '1px solid #22c55e',
-                                        }}
-                                    >
-                                        📸 IMAGE
-                                    </Box>
                                 </Box>
                             )}
 
@@ -498,46 +472,37 @@ const getImageUrl = (imagePath?: string): string => {
                                     Click to locate →
                                 </Typography>
                             </Box>
-                            
-                            <Typography sx={{ color: 'rgba(255, 255, 255, 0.7)', fontSize: '0.85rem', mb: 0.5 }}>
-                                📍 {Number(drone.lat).toFixed(6)}, {Number(drone.lng).toFixed(6)}
-                            </Typography>
-                            
-                            <Typography sx={{ color: 'rgba(255, 255, 255, 0.7)', fontSize: '0.85rem', mb: 1 }}>
-                                🚀 {formatSpeed(drone.details.speed)} m/s | {drone.size || 'medium'}
-                            </Typography>
-                            
-                            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                                <Chip
-                                    label={drone.objective}
-                                    size="small"
-                                    sx={{
-                                        backgroundColor: drone.objective.toLowerCase() === 'kill' ? '#dc2626' : '#f59e0b',
-                                        color: 'white',
-                                        fontSize: '0.7rem',
-                                        fontWeight: 600,
-                                    }}
-                                />
-                                <Chip
-                                    label={drone.details.color}
-                                    size="small"
-                                    sx={{
-                                        backgroundColor: droneColor,
-                                        color: 'white',
-                                        fontSize: '0.7rem',
-                                        fontWeight: 600,
-                                    }}
-                                />
-                                <Chip
-                                    label={drone.type.toUpperCase()}
-                                    size="small"
-                                    sx={{
-                                        backgroundColor: 'rgba(255, 255, 255, 0.1)',
-                                        color: 'white',
-                                        fontSize: '0.7rem',
-                                    }}
-                                />
-                            </Box>
+                                <Typography sx={{ 
+                                    color: 'rgba(255, 255, 255, 0.7)', 
+                                    fontSize: '0.85rem', 
+                                    mb: 0.5,
+                                    display: 'flex',       
+                                    alignItems: 'center'  
+                                }}>
+                                    <GpsFixedIcon sx={{ fontSize: '1rem', mr: 0.75 }} /> 
+                                    {Number(drone.lat).toFixed(6)}, {Number(drone.lng).toFixed(6)}
+                                </Typography>
+
+                                <Typography sx={{ 
+                                    color: 'rgba(255, 255, 255, 0.7)', 
+                                    fontSize: '0.85rem', 
+                                    mb: 1,
+                                    display:'flex',
+                                    alignItems: 'center'   
+                                }}>
+                                    <SpeedIcon sx={{ fontSize: '1rem', mr: 0.75 }}/> 
+                                    {formatSpeed(drone.details.speed)} m/s
+                                </Typography>
+                                <Typography sx={{ 
+                                    color: 'rgba(255, 255, 255, 0.7)', 
+                                    fontSize: '0.85rem', 
+                                    mb: 1,
+                                    display:'flex',
+                                    alignItems: 'center'   
+                                }}>
+                                    <HeightIcon sx={{ fontSize: '1rem', mr: 0.75 }}/> 
+                                    {drone.alt} m
+                                </Typography>
                         </Box>
                     );
                 })}

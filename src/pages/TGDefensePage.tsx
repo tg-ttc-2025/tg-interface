@@ -1,25 +1,16 @@
-// src/pages/TGDefensePage.tsx
-
 import { Box, Button, Switch, FormControlLabel, Tabs, Tab } from '@mui/material';
 import { useState, useEffect, useMemo } from 'react';
-
-import type { DroneObject } from '../services/tgDefenseDetectionService';
 import TGDefense from '../component/integration/defense/TGDefense';
 import TGHistory from '../component/integration/defense/TGHistory';
 import MapComponent from '../component/map/MapComponent';
 import Navbar from '../component/defense/Navbar';
-import { useTGDetections } from '../hooks/Defense/useTgDefenseDetection';
-import { useTGSocket } from '../hooks/Socket/useTgSocket';
-
-interface DroneUpdate extends DroneObject {
-    updateId: string;
-    lastUpdated: number;
-}
+import { useTGDetections } from '../hooks/Defense/useTGDefenseDetection';
+import { useTGSocket } from '../hooks/Socket/useTGSocket';
+import type { DroneUpdate } from '../types/drone.type';
 
 export default function TGDefensePage() {
     const [selectedDroneId, setSelectedDroneId] = useState<string | null>(null);
     
-    // Separate state for live feed (WebSocket only) and history
     const [liveFeed, setLiveFeed] = useState<DroneUpdate[]>([]);
     const [historyData, setHistoryData] = useState<DroneUpdate[]>([]);
     
@@ -27,7 +18,6 @@ export default function TGDefensePage() {
     const [showRoutes, setShowRoutes] = useState(true);
     const [activeTab, setActiveTab] = useState<'live' | 'history'>('live');
     
-    // Filter state for history - THIS IS THE KEY STATE
     const [historyFilterObjId, setHistoryFilterObjId] = useState<string | null>(null);
     
     const [mapState, setMapState] = useState({
@@ -35,21 +25,54 @@ export default function TGDefensePage() {
         zoom: 13,
     });
 
-    // Fetch historical data from TG-SYSTEM backend
     const { data: historyDataFromAPI, isLoading, error, refetch } = useTGDetections(true, 500);
 
     // Connect to TG-SYSTEM WebSocket
     const { realtimeData, isConnected, error: socketError } = useTGSocket(isStarted);
 
-    // Initialize history data from API
-    useEffect(() => {
-        if (historyDataFromAPI && historyDataFromAPI.length > 0) {
-            console.log('📊 Loading historical data:', historyDataFromAPI.length, 'detections');
-            const dronesWithUpdateId = historyDataFromAPI.map((drone) => ({
+    // Helper function to add raw data to drone objects
+    const enrichDroneWithRawData = (drone: any, source: 'api' | 'websocket'): DroneUpdate => {
+        // For API data, we should have full TGDetectionObject
+        if (source === 'api' && drone.rawDetection) {
+            return {
                 ...drone,
                 updateId: `${drone.obj_id}-${Date.now()}-hist`,
-                lastUpdated: Date.now()
-            }));
+                lastUpdated: Date.now(),
+                rawData: {
+                    id: drone.rawDetection.id,
+                    alt: drone.rawDetection.alt?.toString(),
+                    groundHeight: drone.rawDetection.groundHeight,
+                    timestamp: drone.rawDetection.timestamp,
+                    createdAt: drone.rawDetection.createdAt,
+                    updatedAt: drone.rawDetection.updatedAt,
+                    images: drone.rawDetection.images.map((img: any) => ({
+                        id: img.id,
+                        fileName: img.fileName,
+                        fileSize: img.fileSize.toString(),
+                        mimeType: img.mimeType,
+                        isPrimary: img.isPrimary,
+                        publicUrl: img.publicUrl || '',
+                    })),
+                },
+            };
+        }
+        
+        // For WebSocket data, we might not have all raw data
+        // But we can still include what we have
+        return {
+            ...drone,
+            updateId: `${drone.obj_id}-${Date.now()}-${Math.random()}`,
+            lastUpdated: Date.now(),
+            rawData: drone.rawData || undefined,
+        };
+    };
+
+    useEffect(() => {
+        if (historyDataFromAPI && historyDataFromAPI.length > 0) {
+            console.log('Loading historical data:', historyDataFromAPI.length, 'detections');
+            const dronesWithUpdateId = historyDataFromAPI.map((drone) => 
+                enrichDroneWithRawData(drone, 'api')
+            );
             setHistoryData(dronesWithUpdateId);
         }
     }, [historyDataFromAPI]);
@@ -57,33 +80,27 @@ export default function TGDefensePage() {
     // Handle real-time updates from WebSocket
     useEffect(() => {
         if (realtimeData?.objects && realtimeData.objects.length > 0) {
-            console.log('📡 Received real-time data:', realtimeData);
+            console.log('Received real-time data:', realtimeData);
             
             setLiveFeed((prev) => {
-                const newDetections = realtimeData.objects.map((drone) => ({
-                    ...drone,
-                    updateId: `${drone.obj_id}-${Date.now()}-${Math.random()}`,
-                    lastUpdated: Date.now()
-                }));
+                const newDetections = realtimeData.objects.map((drone) => 
+                    enrichDroneWithRawData(drone, 'websocket')
+                );
                 
-                console.log('✅ Adding to live feed:', newDetections.length);
+                console.log('Adding to live feed:', newDetections.length);
                 const updated = [...newDetections, ...prev];
                 return updated.slice(0, 100);
             });
 
-            // Also add to history
             setHistoryData((prev) => {
-                const newDetections = realtimeData.objects.map((drone) => ({
-                    ...drone,
-                    updateId: `${drone.obj_id}-${Date.now()}-${Math.random()}`,
-                    lastUpdated: Date.now()
-                }));
+                const newDetections = realtimeData.objects.map((drone) => 
+                    enrichDroneWithRawData(drone, 'websocket')
+                );
                 return [...newDetections, ...prev];
             });
         }
     }, [realtimeData]);
 
-    // CRITICAL: Apply filter to history data BEFORE passing to TGHistory component
     const filteredHistoryData = useMemo(() => {
         if (!historyFilterObjId) {
             console.log('📋 Showing all history:', historyData.length, 'records');
@@ -91,21 +108,18 @@ export default function TGDefensePage() {
         }
         
         const filtered = historyData.filter(d => d.obj_id === historyFilterObjId);
-        console.log(`🔍 Filtered history for "${historyFilterObjId}":`, filtered.length, 'records');
+        console.log(`Filtered history for "${historyFilterObjId}":`, filtered.length, 'records');
         return filtered;
     }, [historyData, historyFilterObjId]);
 
-    // Get data to display on map based on active tab
     const displayedDrones = useMemo(() => {
         if (activeTab === 'live') {
             return liveFeed;
         } else {
-            // For history tab, use the filtered data
             return filteredHistoryData;
         }
     }, [activeTab, liveFeed, filteredHistoryData]);
 
-    // Group updates by obj_id for route visualization
     const droneRoutes = useMemo(() => {
         const routes = new Map<string, DroneUpdate[]>();
         
@@ -120,11 +134,10 @@ export default function TGDefensePage() {
             updates.sort((a, b) => a.lastUpdated - b.lastUpdated);
         });
         
-        console.log('🛤️ Drone routes computed:', routes.size, 'unique drones');
+        console.log('Drone routes computed:', routes.size, 'unique drones');
         return routes;
     }, [displayedDrones]);
 
-    // Get latest position for each drone
     const latestDrones = useMemo(() => {
         const latest = new Map<string, DroneUpdate>();
         
@@ -137,6 +150,7 @@ export default function TGDefensePage() {
         
         const result = Array.from(latest.values());
         console.log('📍 Latest positions:', result.length, 'drones');
+        console.log('Sample drone data:', result[0]); // Debug log
         return result;
     }, [displayedDrones]);
 
@@ -172,9 +186,8 @@ export default function TGDefensePage() {
         console.log('🔄 Refreshing history...');
     };
 
-    // CRITICAL: This handler receives the selected object ID from TGHistory
     const handleHistorySelect = (objId: string | null) => {
-        console.log('🎯 History filter changed to:', objId || 'ALL');
+        console.log('History filter changed to:', objId || 'ALL');
         setHistoryFilterObjId(objId);
     };
 
@@ -197,7 +210,6 @@ export default function TGDefensePage() {
                 flexDirection: 'column',
                 backgroundColor: 'rgba(18, 18, 18, 0.95)',
             }}>
-                {/* Tab Selector */}
                 <Tabs
                     value={activeTab}
                     onChange={(_, newValue) => setActiveTab(newValue)}
@@ -205,14 +217,15 @@ export default function TGDefensePage() {
                         borderBottom: '2px solid rgba(255, 255, 255, 0.1)',
                         backgroundColor: 'rgba(0, 0, 0, 0.5)',
                         '& .MuiTab-root': {
-                            color: 'rgba(255, 255, 255, 0.5)',
+                            color: 'rgba(255, 255, 255, 0.5)', 
                             fontWeight: 600,
                             fontSize: '0.85rem',
                             textTransform: 'uppercase',
                             letterSpacing: '0.5px',
                         },
                         '& .Mui-selected': {
-                            color: 'white',
+                            color: 'white !important', 
+                            backgroundColor: 'rgba(255, 255, 255, 0.1)', 
                         },
                         '& .MuiTabs-indicator': {
                             backgroundColor: activeTab === 'live' ? '#dc2626' : '#3b82f6',
@@ -220,8 +233,8 @@ export default function TGDefensePage() {
                         },
                     }}
                 >
-                    <Tab label="🔴 Live Feed" value="live" />
-                    <Tab label="📋 History" value="history" />
+                    <Tab label="Live Feed" value="live" /> 
+                    <Tab label="History" value="history" />
                 </Tabs>
 
                 {/* Content based on active tab */}
@@ -248,12 +261,10 @@ export default function TGDefensePage() {
                 left: 470, 
                 zIndex: 1000,
                 display: 'flex',
-                gap: 2,
             }}>
                 {/* Route Toggle Switch */}
                 <Box sx={{ 
                     backgroundColor: 'rgba(255, 255, 255, 0.9)', 
-                    borderRadius: '8px', 
                     padding: '4px 12px',
                     boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
                 }}>
@@ -266,7 +277,7 @@ export default function TGDefensePage() {
                                 color='error'
                             />
                         }
-                        label="Routes"
+                        label="Route Line"
                         sx={{
                             '& .MuiTypography-root': {
                                 fontWeight: 600,
@@ -287,7 +298,6 @@ export default function TGDefensePage() {
                         fontWeight: 600,
                         fontSize: '0.9rem',
                         padding: '8px 20px',
-                        borderRadius: '8px',
                         boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
                         '&:hover': {
                             backgroundColor: isStarted ? '#b91c1c' : '#16a34a',
@@ -308,14 +318,13 @@ export default function TGDefensePage() {
                             fontWeight: 600,
                             fontSize: '0.9rem',
                             padding: '8px 20px',
-                            borderRadius: '8px',
                             boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
                             '&:hover': {
                                 backgroundColor: '#4b5563',
                             }
                         }}
                     >
-                        🧹 CLEAR
+                        CLEAR
                     </Button>
                 ) : (
                     <Button
@@ -327,7 +336,6 @@ export default function TGDefensePage() {
                             fontWeight: 600,
                             fontSize: '0.9rem',
                             padding: '8px 20px',
-                            borderRadius: '8px',
                             boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
                             '&:hover': {
                                 backgroundColor: '#2563eb',
@@ -337,39 +345,6 @@ export default function TGDefensePage() {
                         🔄 REFRESH
                     </Button>
                 )}
-
-                {/* Connection Status */}
-                <Box sx={{
-                    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-                    borderRadius: '8px',
-                    padding: '8px 16px',
-                    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 1,
-                }}>
-                    <Box sx={{
-                        width: 10,
-                        height: 10,
-                        borderRadius: '50%',
-                        backgroundColor: isConnected ? '#22c55e' : '#dc2626',
-                        boxShadow: isConnected 
-                            ? '0 0 8px #22c55e' 
-                            : '0 0 8px #dc2626',
-                        animation: isConnected ? 'pulse 2s infinite' : 'none',
-                        '@keyframes pulse': {
-                            '0%, 100%': { opacity: 1 },
-                            '50%': { opacity: 0.5 },
-                        }
-                    }} />
-                    <span style={{ 
-                        fontWeight: 600, 
-                        fontSize: '0.9rem',
-                        color: '#1f2937',
-                    }}>
-                        {isConnected ? 'LIVE' : 'OFFLINE'}
-                    </span>
-                </Box>
             </Box>
 
             {/* Loading/Error States */}

@@ -9,6 +9,8 @@ interface DroneData {
   type: string;
   lat: number;
   lng: number;
+  alt?: number | string;  // Made optional with ?
+  groundHeight?: string;  // Made optional with ?
   objective: string;
   size: string;
   details: {
@@ -16,7 +18,7 @@ interface DroneData {
     speed: number;
   };
   image?: {
-    path: string;
+    publicUrl: string;
     filename: string;
   };
 }
@@ -87,6 +89,12 @@ export default function MapOffenseComponent({
       return `https://tesa-api.crma.dev${imagePath}`;
     }
     return imagePath;
+  };
+
+  const formatAltitude = (alt?: number | string): string => {
+    if (alt === undefined || alt === null || alt === '') return 'N/A';
+    const altNum = typeof alt === 'string' ? parseFloat(alt) : alt;
+    return isNaN(altNum) ? 'N/A' : `${altNum.toFixed(1)} m`;
   };
 
   const createTrailMarkerElement = (color: string, index: number): HTMLDivElement => {
@@ -414,7 +422,15 @@ export default function MapOffenseComponent({
 
   const createPopupHTML = (drone: DroneData): string => {
     const droneColor = getColorHex(drone.details.color);
-    const imageUrl = getImageUrl(drone.image?.path);
+    const imageUrl = getImageUrl(drone.image?.publicUrl);
+    
+    console.log('🐛 DEBUG - Drone data in popup:', {
+      obj_id: drone.obj_id,
+      alt: drone.alt,
+      groundHeight: drone.groundHeight,
+      hasAlt: drone.alt !== undefined,
+      hasGroundHeight: !!drone.groundHeight
+    });
     
     return `
       <div style="
@@ -506,6 +522,16 @@ export default function MapOffenseComponent({
               <span style="color: rgba(255,255,255,0.6);">Speed:</span>
               <span style="font-weight: 600;">${drone.details.speed} m/s</span>
               
+              ${drone.alt !== undefined && drone.alt !== null && drone.alt !== '' ? `
+              <span style="color: rgba(255,255,255,0.6);">Altitude:</span>
+              <span style="font-weight: 600;">${formatAltitude(drone.alt)}</span>
+              ` : ''}
+              
+              ${drone.groundHeight ? `
+              <span style="color: rgba(255,255,255,0.6);">Ground Height:</span>
+              <span style="font-weight: 600;">${drone.groundHeight}</span>
+              ` : ''}
+              
               <span style="color: rgba(255,255,255,0.6);">Color:</span>
               <span style="
                 font-weight: 600; 
@@ -591,16 +617,12 @@ export default function MapOffenseComponent({
       return;
     }
 
-    // --- Cleanup/Hiding Logic ---
-    // Get all IDs of layers/sources currently on the map before processing new routes
     const allKnownRouteLayerIds = Array.from(pathLayersRef.current);
     const allKnownDroneIdsWithRoutes = Array.from(droneTrailsRef.current.keys());
 
-    // 1. Clear all existing route layers/sources and trail markers
     if (allKnownRouteLayerIds.length > 0 || allKnownDroneIdsWithRoutes.length > 0) {
       console.log('🧹 Clearing all existing routes and trails');
       
-      // Remove Layers
       allKnownRouteLayerIds.forEach(layerId => {
         try {
           if (map.current!.getLayer(layerId)) {
@@ -609,7 +631,6 @@ export default function MapOffenseComponent({
         } catch (e) {}
       });
 
-      // Remove Sources (using the drone IDs we know had routes)
       allKnownDroneIdsWithRoutes.forEach(objId => {
         const sourceId = `route-${objId}`;
         try {
@@ -621,24 +642,20 @@ export default function MapOffenseComponent({
       
       pathLayersRef.current.clear();
       
-      // Clear Trail Markers
       droneTrailsRef.current.forEach((trail) => {
         trail.trailMarkers.forEach(marker => marker.remove());
       });
       droneTrailsRef.current.clear();
     }
     
-    // Check if we need to draw new routes
     if (!droneRoutes || droneRoutes.size === 0) {
         console.log('✅ All routes cleared. No new routes to draw.');
         return;
     }
 
-    // --- Drawing Logic ---
     console.log('\n=== 🗺️ Drawing all drone routes ===');
     console.log('Routes to draw:', droneRoutes.size);
     
-    // We are now guaranteed that droneRoutes is defined and has elements
     droneRoutes.forEach((updates, objId) => {
       if (updates.length < 2) {
         console.log(`⚠️ Skipping ${objId}: only ${updates.length} update(s)`);
@@ -650,15 +667,12 @@ export default function MapOffenseComponent({
 
       console.log(`Processing route for ${objId} with ${updates.length} updates`);
 
-      // Draw complete route line
       drawCompleteRoute(objId, updates, color);
-
-      // Draw historical position markers
       drawHistoricalMarkers(objId, updates, color);
     });
 
     console.log('=== ✅ All routes drawn ===\n');
-  }, [droneRoutes]); // Dependencies remain the same
+  }, [droneRoutes]);
 
   // Handle selected drone (fly to location)
   useEffect(() => {
@@ -700,7 +714,15 @@ export default function MapOffenseComponent({
 
     console.log('\n=== 🔄 Updating drone markers ===');
     console.log('Drones count:', drones.length);
-    console.log('Drones:', drones.map(d => ({ id: d.obj_id, lat: d.lat, lng: d.lng })));
+    
+    // Log first drone to verify data structure
+    if (drones.length > 0) {
+      console.log('Sample drone data:', {
+        obj_id: drones[0].obj_id,
+        alt: drones[0].alt,
+        groundHeight: drones[0].groundHeight,
+      });
+    }
 
     const currentDroneIds = new Set(drones.map(d => d.obj_id));
     
@@ -715,32 +737,24 @@ export default function MapOffenseComponent({
 
     // Add or update markers for current drones
     drones.forEach((drone) => {
-      console.log(`\n--- Processing drone: ${drone.obj_id} ---`);
-      console.log('Drone position:', { lat: drone.lat, lng: drone.lng });
-
       const existingMarkerData = markersRef.current.get(drone.obj_id);
       const currentColor = getColorHex(drone.details.color);
       
       if (existingMarkerData) {
-        console.log('Existing marker found - updating position');
-        
         const positionChanged = 
           Number(existingMarkerData.lastLat) !== Number(drone.lat) || 
           Number(existingMarkerData.lastLng) !== Number(drone.lng);
 
         const colorChanged = existingMarkerData.color !== currentColor;
-        const imageUrl = getImageUrl(drone.image?.path);
+        const imageUrl = getImageUrl(drone.image?.publicUrl);
         const storedImagePath = existingMarkerData.popup.getElement()?.dataset.imagePath;
         const imageChanged = imageUrl !== storedImagePath;
 
         if (colorChanged || imageChanged) {
-          console.log('🔄 Recreating marker due to color/image change');
           existingMarkerData.marker.remove();
           markersRef.current.delete(drone.obj_id);
           createNewMarker(drone, currentColor);
         } else if (positionChanged) {
-          console.log(`🚁 DRONE ${drone.obj_id} MOVED!`);
-          
           const markerElement = existingMarkerData.marker.getElement();
           markerElement.classList.add('moving');
           existingMarkerData.marker.setLngLat([Number(drone.lng), Number(drone.lat)]);
@@ -752,11 +766,9 @@ export default function MapOffenseComponent({
             markerElement.classList.remove('moving');
           }, 500);
         } else {
-          console.log('ℹ️ No changes, updating popup only');
           existingMarkerData.popup.setHTML(createPopupHTML(drone));
         }
       } else {
-        console.log('➕ Creating new marker');
         createNewMarker(drone, currentColor);
       }
     });
@@ -767,7 +779,7 @@ export default function MapOffenseComponent({
   const createNewMarker = (drone: DroneData, droneColor: string) => {
     if (!map.current) return;
 
-    console.log(`📍 Creating new marker for ${drone.obj_id} at [${drone.lat}, ${drone.lng}]`);
+    console.log(`📍 Creating new marker for ${drone.obj_id}`);
 
     const el = createDroneMarkerElement(drone);
     
@@ -788,7 +800,7 @@ export default function MapOffenseComponent({
 
     const popupElement = popup.getElement();
     if (popupElement) {
-      popupElement.dataset.imagePath = getImageUrl(drone.image?.path);
+      popupElement.dataset.imagePath = getImageUrl(drone.image?.publicUrl);
     }
 
     marker.setPopup(popup);

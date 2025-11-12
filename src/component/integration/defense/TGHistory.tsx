@@ -166,9 +166,10 @@ export default function TGHistory({
             {/* Header */}
             <Box
                 sx={{
-                    borderLeft: '8px solid #3b82f6',
-                    bgcolor: '#1e3a5f',
-                    padding: 3,
+                    borderLeft: '8px solid #F5B027',
+                    bgcolor: '#a18b60ff',
+                    paddingY: 2,
+                    paddingX: 4,
                     borderBottom: '2px solid #404040',
                 }}
             >
@@ -177,7 +178,7 @@ export default function TGHistory({
                         sx={{
                             width: 50,
                             height: 50,
-                            backgroundColor: '#3b82f6',
+                            backgroundColor: '#F5B027',
                         }}
                     >
                         <HistoryIcon sx={{ fontSize: 30 }} />
@@ -198,7 +199,7 @@ export default function TGHistory({
                         <Typography
                             variant="body2"
                             sx={{
-                                color: '#93c5fd',
+                                color: 'white',
                                 fontSize: '0.75rem',
                                 fontWeight: 500,
                             }}
@@ -230,10 +231,10 @@ export default function TGHistory({
                             sx={{
                                 color: 'white',
                                 '.MuiOutlinedInput-notchedOutline': {
-                                    borderColor: 'rgba(255, 255, 255, 0.2)',
+                                    borderColor: '#F5B027',
                                 },
                                 '&:hover .MuiOutlinedInput-notchedOutline': {
-                                    borderColor: 'rgba(59, 130, 246, 0.5)',
+                                    borderColor: '#F5B027',
                                 },
                                 '.MuiSvgIcon-root': {
                                     color: 'white',
@@ -271,7 +272,7 @@ export default function TGHistory({
             </Collapse>
 
             {/* Search Bar */}
-            <Box sx={{ padding: 2 }}>
+            <Box sx={{ marginTop:1, marginBottom:1}}>
                 <TextField
                     fullWidth
                     placeholder={`Search ${selectedObjId ? selectedObjId + ' history' : 'all history'}...`}
@@ -287,15 +288,18 @@ export default function TGHistory({
                         sx: {
                             backgroundColor: 'rgba(255, 255, 255, 0.05)',
                             color: 'white',
-                            borderRadius: '8px',
+                            borderRadius: '0px','& .MuiInputBase-input': {
+                                padding: '6px 10px',
+                                fontSize: '0.8rem', 
+                            },
                             '& .MuiOutlinedInput-notchedOutline': {
                                 borderColor: 'rgba(255, 255, 255, 0.1)',
                             },
                             '&:hover .MuiOutlinedInput-notchedOutline': {
-                                borderColor: 'rgba(59, 130, 246, 0.5)',
+                                borderColor: '#d99f2cff',
                             },
                             '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                                borderColor: '#3b82f6',
+                                borderColor: '#F5B027',
                             },
                         },
                     }}
@@ -303,13 +307,12 @@ export default function TGHistory({
             </Box>
 
             {/* Statistics */}
-            <Box sx={{ px: 2, pb: 2, display: 'flex', gap: 1.5 }}>
+            <Box sx={{ px: 5, pb: 5, display: 'flex', gap: 2, mb: -5 }}>
                 <Box
                     sx={{
                         flex: 1,
                         backgroundColor: 'rgba(59, 130, 246, 0.15)',
                         border: '1px solid rgba(59, 130, 246, 0.3)',
-                        borderRadius: '8px',
                         padding: 1.5,
                         display: 'flex',
                         flexDirection: 'column',
@@ -329,7 +332,6 @@ export default function TGHistory({
                         flex: 1,
                         backgroundColor: 'rgba(34, 197, 94, 0.15)',
                         border: '1px solid rgba(34, 197, 94, 0.3)',
-                        borderRadius: '8px',
                         padding: 1.5,
                         display: 'flex',
                         flexDirection: 'column',
@@ -349,7 +351,6 @@ export default function TGHistory({
                         flex: 1,
                         backgroundColor: 'rgba(168, 85, 247, 0.15)',
                         border: '1px solid rgba(168, 85, 247, 0.3)',
-                        borderRadius: '8px',
                         padding: 1.5,
                         display: 'flex',
                         flexDirection: 'column',
@@ -375,17 +376,17 @@ export default function TGHistory({
                         width: '8px',
                     },
                     '&::-webkit-scrollbar-track': {
-                        backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                        backgroundColor: '#483d26ff',
                     },
                     '&::-webkit-scrollbar-thumb': {
-                        backgroundColor: '#3b82f6',
+                        backgroundColor: '#fab833ff',
                         borderRadius: '4px',
                     },
                 }}
             >
                 {isLoading && (
                     <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', py: 4 }}>
-                        <CircularProgress size={40} sx={{ color: '#3b82f6' }} />
+                        <CircularProgress size={40} sx={{ color: '#fab833ff' }} />
                     </Box>
                 )}
 
@@ -414,18 +415,18 @@ export default function TGHistory({
                             key={detection.updateId}
                             sx={{
                                 backgroundColor: isSelected 
-                                    ? 'rgba(59, 130, 246, 0.2)' 
-                                    : 'rgba(59, 130, 246, 0.05)',
-                                border: `1px solid ${isSelected ? 'rgba(59, 130, 246, 0.6)' : 'rgba(59, 130, 246, 0.2)'}`,
-                                borderLeft: `4px solid ${droneColor}`,
+                                    ? '#7b693cff' 
+                                    : '#392d13ff',
+                                border: `1px solid ${isSelected ? '#8b671dff' : '#fab833ff'}`,
+                                borderLeft: `4px solid #fab833ff`,
                                 borderRadius: '8px',
                                 padding: 2,
                                 mb: 1.5,
                                 transition: 'all 0.3s ease',
                                 '&:hover': {
-                                    backgroundColor: 'rgba(59, 130, 246, 0.15)',
-                                    border: '1px solid rgba(59, 130, 246, 0.4)',
-                                    borderLeft: `4px solid ${droneColor}`,
+                                    backgroundColor: '#634914ff',
+                                    border: '1px solid #b7882cff',
+                                    borderLeft: `4px solid #fab833ff`,
                                     transform: 'translateX(4px)',
                                 },
                             }}

@@ -167,14 +167,14 @@ export default function OffensePage() {
             </Box>
 
             <Box sx={{ flex: 1, position: 'relative' }}>
-                <MapOffenseComponent
+                {/* <MapOffenseComponent
                     center={mapState.center}
                     zoom={mapState.zoom}
                     drones={latestDrones}
                     droneRoutes={showRoutes ? droneRoutes : undefined}
                     selectedDroneId={selectedDroneId}
                     onMapMove={handleMapMove}
-                />
+                /> */}
             </Box>
         </Box>
         </>
