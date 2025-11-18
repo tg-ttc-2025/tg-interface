@@ -7,44 +7,38 @@ import SatelliteAltIcon from '@mui/icons-material/SatelliteAlt';
 
 mapboxgl.accessToken = 'pk.eyJ1IjoiY2hhdGNoYWxlcm0iLCJhIjoiY21nZnpiYzU3MGRzdTJrczlkd3RxamN4YyJ9.k288gnCNLdLgczawiB79gQ';
 
-// --- UPDATED INTERFACE ---
-interface DroneData {
-  obj_id: string;
+// --- UPDATED INTERFACE to include all fields ---
+interface OffenseDroneData {
+  codeName: string; 
   type: string;
   lat: number;
   lng: number;
   objective: string;
-  size: string;
-  details: {
-    color: string;
-    speed: number;
-  };
-  image?: {
-    publicUrl: string;
-    filename: string;
-  };
-  rawData?: {
-    id: string;
-    alt?: string;
-    groundHeight?: string;
-    timestamp: string;
-    createdAt: string;
-    updatedAt: string;
-    images: Array<{
-      id: string;
-      fileName: string;
-      fileSize: string;
-      mimeType: string;
-      isPrimary: boolean;
-      publicUrl: string;
-    }>;
-  };
+  size: number; 
+  color: string; 
+  speed: number; 
+  alt?: number;
+  id: string;
+  
+  // All fields from your DTO
+  groupId: number;
+  accNoising?: boolean;
+  angNoising?: boolean;
+  magNoising?: boolean;
+  gpsSpoofing?: boolean;
+  target?: string;
+  mission?: string;
+  rowAngle?: number;
+  pitchAngle?: number;
+  yawAngle?: number;
+  timestamp: string; // Added timestamp
 }
 
-interface DroneUpdate extends DroneData {
+interface OffenseDroneUpdate extends OffenseDroneData {
   updateId: string;
   lastUpdated: number;
 }
+// ---
 
 interface DronePosition {
   lat: number;
@@ -55,16 +49,16 @@ interface DronePosition {
 interface MapProps {
   center: [number, number];
   zoom: number;
-  drones?: DroneData[];
-  droneRoutes?: Map<string, DroneUpdate[]>;
-  selectedDroneId?: string | null;
+  drones?: OffenseDroneData[]; 
+  droneRoutes?: Map<string, OffenseDroneUpdate[]>; 
+  selectedDroneId?: string | null; // This is the codeName
   onMapMove?: (lng: number, lat: number, zoom: number) => void;
 }
 
-export default function MapComponent({ 
+export default function MapOffenseComponent({ 
   center, 
   zoom, 
-  drones = [], 
+  drones = [],
   droneRoutes,
   selectedDroneId, 
   onMapMove 
@@ -74,11 +68,15 @@ export default function MapComponent({
   const markersRef = useRef<Map<string, { 
     marker: mapboxgl.Marker; 
     color: string; 
-    popup: mapboxgl.Popup;
+    popup: mapboxgl.Popup; // <-- We will store the popup here
     lastLat: number;
     lastLng: number;
     lastAlt?: number;
   }>>(new Map());
+  
+  // This ref tracks the popup that was opened by a CLICK,
+  // so the 'mouseleave' event doesn't close it.
+  const selectedPopupRef = useRef<mapboxgl.Popup | null>(null);
   
   const droneTrailsRef = useRef<Map<string, {
     positions: DronePosition[];
@@ -88,7 +86,6 @@ export default function MapComponent({
   const pathLayersRef = useRef<Set<string>>(new Set());
   const is3DMode = useRef<boolean>(false);
   
-  // State for map style toggle
   const [mapStyle, setMapStyle] = useState<'3d' | '2d'>('3d');
 
   const getColorHex = (color: string): string => {
@@ -106,39 +103,9 @@ export default function MapComponent({
     return colorMap[color.toLowerCase()] || '#ef4444';
   };
 
-  const getImageUrl = (publicUrl?: string): string => {
-    return publicUrl || '';
-  };
-
-  const formatTimestamp = (timestamp: string): string => {
-    try {
-      return new Date(timestamp).toLocaleString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-      });
-    } catch {
-      return timestamp;
-    }
-  };
-
-  const formatFileSize = (size: string | number): string => {
-    const bytes = typeof size === 'string' ? parseInt(size) : size;
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(2)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
-  };
-
-  const calculateAltitude = (drone: DroneData): number => {
-    if (!drone.rawData) return 0;
-    
-    const alt = drone.rawData.alt ? parseFloat(drone.rawData.alt) : 0;
-    const groundHeight = drone.rawData.groundHeight ? parseFloat(drone.rawData.groundHeight) : 0;
-    
-    return alt;
+  const calculateAltitude = (drone: OffenseDroneData): number => {
+    // Ensure alt is treated as a number
+    return drone.alt ? Number(drone.alt) : 0;
   };
 
   const createTrailMarkerElement = (color: string, index: number): HTMLDivElement => {
@@ -176,12 +143,12 @@ export default function MapComponent({
     return el;
   };
 
-  const drawCompleteRoute = (objId: string, updates: DroneUpdate[], color: string) => {
+  const drawCompleteRoute = (codeName: string, updates: OffenseDroneUpdate[], color: string) => {
     if (!map.current || updates.length < 2) return;
 
-    const sourceId = `route-${objId}`;
-    const lineLayerId = `route-line-${objId}`;
-    const arrowLayerId = `route-arrow-${objId}`;
+    const sourceId = `route-${codeName}`;
+    const lineLayerId = `route-line-${codeName}`;
+    const arrowLayerId = `route-arrow-${codeName}`;
 
     try {
       if (map.current.getLayer(arrowLayerId)) {
@@ -201,10 +168,10 @@ export default function MapComponent({
 
     const coordinates = updates.map(update => {
       const altitude = calculateAltitude(update);
-      return [update.lng, update.lat, altitude];
+      return [Number(update.lng), Number(update.lat), altitude]; // Ensure lat/lng are numbers
     });
 
-    console.log(`🛤️ Drawing 3D route for ${objId} with ${coordinates.length} points`);
+    console.log(`🛤️ Drawing 3D route for ${codeName} with ${coordinates.length} points`);
 
     try {
       map.current.addSource(sourceId, {
@@ -212,7 +179,7 @@ export default function MapComponent({
         data: {
           type: 'Feature',
           properties: {
-            objId: objId,
+            codeName: codeName, 
             color: color
           },
           geometry: {
@@ -259,19 +226,19 @@ export default function MapComponent({
       pathLayersRef.current.add(lineLayerId);
       pathLayersRef.current.add(arrowLayerId);
 
-      console.log(`✅ 3D route drawn for ${objId}`);
+      console.log(`✅ 3D route drawn for ${codeName}`);
     } catch (error) {
       console.error('❌ Error drawing 3D route:', error);
     }
   };
 
-  const drawHistoricalMarkers = (objId: string, updates: DroneUpdate[], color: string) => {
+  const drawHistoricalMarkers = (codeName: string, updates: OffenseDroneUpdate[], color: string) => {
     if (!map.current || updates.length < 2) return;
 
-    const existingTrail = droneTrailsRef.current.get(objId);
+    const existingTrail = droneTrailsRef.current.get(codeName);
     if (existingTrail) {
       existingTrail.trailMarkers.forEach(marker => marker.remove());
-      droneTrailsRef.current.delete(objId);
+      droneTrailsRef.current.delete(codeName);
     }
 
     const trailMarkers: mapboxgl.Marker[] = [];
@@ -279,12 +246,14 @@ export default function MapComponent({
     updates.slice(0, -1).forEach((update, index) => {
       const trailEl = createTrailMarkerElement(color, index);
       const altitude = calculateAltitude(update);
+      const lat = Number(update.lat); // Ensure number
+      const lng = Number(update.lng); // Ensure number
       
       const trailMarker = new mapboxgl.Marker({
         element: trailEl,
         anchor: 'center',
       })
-        .setLngLat([update.lng, update.lat]);
+        .setLngLat([lng, lat]);
       
       if (is3DMode.current && altitude > 0) {
         (trailMarker as any).setAltitude(altitude);
@@ -297,8 +266,8 @@ export default function MapComponent({
         closeButton: false,
       }).setHTML(`
         <div style="padding: 8px; background: rgba(0,0,0,0.8); color: white; border-radius: 6px; font-size: 11px;">
-          <strong>${update.obj_id}</strong> - Update #${index + 1}<br/>
-          📍 ${update.lat.toFixed(6)}, ${update.lng.toFixed(6)}<br/>
+          <strong>${update.codeName}</strong> - Update #${index + 1}<br/>
+          📍 ${lat.toFixed(6)}, ${lng.toFixed(6)}<br/> 
           ${altitude > 0 ? `✈️ ${altitude.toFixed(1)}m altitude<br/>` : ''}
           ⏰ ${new Date(update.lastUpdated).toLocaleTimeString()}
         </div>
@@ -308,20 +277,20 @@ export default function MapComponent({
       trailMarkers.push(trailMarker);
     });
 
-    droneTrailsRef.current.set(objId, {
-      positions: updates.map(u => ({ lat: u.lat, lng: u.lng, timestamp: u.lastUpdated })),
+    droneTrailsRef.current.set(codeName, {
+      positions: updates.map(u => ({ lat: Number(u.lat), lng: Number(u.lng), timestamp: u.lastUpdated })),
       trailMarkers: trailMarkers
     });
 
-    console.log(`📍 Created ${trailMarkers.length} historical 3D markers for ${objId}`);
+    console.log(`📍 Created ${trailMarkers.length} historical 3D markers for ${codeName}`);
   };
 
-  const createDroneMarkerElement = (drone: DroneData, altitude: number): HTMLDivElement => {
+  const createDroneMarkerElement = (drone: OffenseDroneData, altitude: number): HTMLDivElement => {
     const el = document.createElement('div');
     el.className = 'drone-marker';
-    el.dataset.droneId = drone.obj_id;
+    el.dataset.droneId = drone.codeName; 
     
-    const droneColor = getColorHex(drone.details.color);
+    const droneColor = getColorHex(drone.color); 
 
     if (!document.getElementById('drone-marker-styles')) {
       const styleSheet = document.createElement('style');
@@ -466,41 +435,34 @@ export default function MapComponent({
           display: none;
         }
 
-        .raw-data-section {
-          font-family: 'Courier New', monospace;
-          font-size: 11px;
-          line-height: 1.6;
+        .popup-close-btn {
+          position: absolute;
+          top: 8px;
+          right: 8px;
+          width: 24px;
+          height: 24px;
+          background: rgba(239, 68, 68, 0.9);
+          border: none;
+          border-radius: 50%;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 10000;
+          transition: all 0.2s ease;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
         }
 
-        .raw-data-key {
-          color: #60a5fa;
-          font-weight: 600;
+        .popup-close-btn:hover {
+          background: rgba(220, 38, 38, 1);
+          transform: scale(1.1);
         }
 
-        .raw-data-value {
-          color: #d1d5db;
-        }
-
-        .raw-data-string {
-          color: #86efac;
-        }
-
-        .raw-data-number {
-          color: #fbbf24;
-        }
-
-        .raw-data-section::-webkit-scrollbar {
-          width: 6px;
-        }
-
-        .raw-data-section::-webkit-scrollbar-track {
-          background: rgba(0,0,0,0.2);
-          border-radius: 3px;
-        }
-
-        .raw-data-section::-webkit-scrollbar-thumb {
-          background: rgba(255,255,255,0.3);
-          border-radius: 3px;
+        .popup-close-btn svg {
+          width: 14px;
+          height: 14px;
+          stroke: white;
+          stroke-width: 2.5;
         }
       `;
       document.head.appendChild(styleSheet);
@@ -525,10 +487,28 @@ export default function MapComponent({
     return el;
   };
 
-  const createPopupHTML = (drone: DroneData): string => {
-    const droneColor = getColorHex(drone.details.color);
-    const imageUrl = getImageUrl(drone.image?.publicUrl);
+  const renderStatus = (label: string, active: boolean | undefined) => {
+    const color = active ? '#ef4444' : '#22c55e';
+    const text = active ? 'ACTIVE' : 'Normal';
+    return `
+      <span style="color: rgba(255,255,255,0.6);">${label}:</span>
+      <span style="font-weight: 600; color: ${color};">${text}</span>
+    `;
+  };
+
+  const createPopupHTML = (drone: OffenseDroneData): string => {
+    const droneColor = getColorHex(drone.color);
     const altitude = calculateAltitude(drone);
+    const lat = Number(drone.lat); // Ensure number
+    const lng = Number(drone.lng); // Ensure number
+    
+    // Safely handle speed - ensure it's a number
+    const speed = typeof drone.speed === 'number' ? drone.speed : parseFloat(String(drone.speed || 0)) || 0;
+    
+    // Safely handle angles
+    const pitchAngle = typeof drone.pitchAngle === 'number' ? drone.pitchAngle : parseFloat(String(drone.pitchAngle || 0)) || 0;
+    const yawAngle = typeof drone.yawAngle === 'number' ? drone.yawAngle : parseFloat(String(drone.yawAngle || 0)) || 0;
+    const rowAngle = typeof drone.rowAngle === 'number' ? drone.rowAngle : parseFloat(String(drone.rowAngle || 0)) || 0;
     
     return `
       <div style="
@@ -537,44 +517,19 @@ export default function MapComponent({
         border-radius: 12px;
         color: white;
         font-family: 'Inter', sans-serif;
-        min-width: 320px;
-        max-width: 400px;
+        width: 100%;
         overflow: hidden;
         box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+        position: relative;
       ">
-        ${imageUrl ? `
-          <div style="
-            width: 100%;
-            height: 160px;
-            overflow: hidden;
-            position: relative;
-          ">
-            <img 
-              src="${imageUrl}" 
-              alt="Drone Detection"
-              style="
-                width: 100%;
-                height: 100%;
-                object-fit: cover;
-              "
-              onerror="this.parentElement.style.display='none'"
-            />
-            <div style="
-              position: absolute;
-              top: 8px;
-              right: 8px;
-              background: rgba(0,0,0,0.7);
-              padding: 4px 8px;
-              border-radius: 4px;
-              font-size: 10px;
-              font-weight: 600;
-              backdrop-filter: blur(4px);
-            ">
-              LIVE FEED
-            </div>
-          </div>
-        ` : ''}
         
+        <!-- Close Button (กากะบาท) -->
+        <button class="popup-close-btn" onclick="this.closest('.mapboxgl-popup').remove()">
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M18 6L6 18M6 6L18 18" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+
         <div style="padding: 12px;">
           <div style="
             display: flex;
@@ -591,7 +546,7 @@ export default function MapComponent({
               border-radius: 50%;
               box-shadow: 0 0 8px ${droneColor};
             "></div>
-            <strong style="font-size: 14px; text-transform: uppercase; flex: 1;">${drone.obj_id}</strong>
+            <strong style="font-size: 14px; text-transform: uppercase; flex: 1;">${drone.codeName}</strong> 
             <div style="
               background: ${droneColor};
               padding: 3px 8px;
@@ -603,81 +558,80 @@ export default function MapComponent({
             </div>
           </div>
           
-          <div style="font-size: 12px; line-height: 1.8;">
-            <div style="display: grid; grid-template-columns: auto 1fr; gap: 8px 12px;">
-              <span style="color: rgba(255,255,255,0.6);">Mission:</span>
-              <span style="
-                background-color: ${drone.objective.toLowerCase() === 'kill' ? '#dc2626' : '#f59e0b'};
-                padding: 2px 8px;
-                border-radius: 4px;
-                font-weight: 600;
-                font-size: 10px;
-                text-align: center;
-              ">${drone.objective.toUpperCase()}</span>
-              
-              <span style="color: rgba(255,255,255,0.6);">Size:</span>
-              <span style="font-weight: 600; text-transform: capitalize;">${drone.size}</span>
-              
-              <span style="color: rgba(255,255,255,0.6);">Speed:</span>
-              <span style="font-weight: 600;">${drone.details.speed} m/s</span>
-
-              ${drone.rawData?.alt ? `
-              <span style="color: rgba(255,255,255,0.6);">Altitude:</span>
-              <span style="font-weight: 600;">${drone.rawData.alt}m</span>
-              ` : ''}
-
-              ${drone.rawData?.groundHeight ? `
-              <span style="color: rgba(255,255,255,0.6);">Ground Height:</span>
-              <span style="font-weight: 600;">${drone.rawData.groundHeight}</span>
-              ` : ''}
-
-              ${altitude > 0 ? `
-              <span style="color: rgba(255,255,255,0.6);">Flying At:</span>
-              <span style="font-weight: 600; color: #3b82f6;">✈️ ${altitude.toFixed(1)}m</span>
-              ` : ''}
-              
-              <span style="color: rgba(255,255,255,0.6);">Color:</span>
-              <span style="
-                font-weight: 600; 
-                text-transform: capitalize;
-                display: flex;
-                align-items: center;
-                gap: 6px;
-              ">
-                <span style="
-                  display: inline-block;
-                  width: 10px;
-                  height: 10px;
-                  background-color: ${droneColor};
-                  border-radius: 50%;
-                  border: 1px solid rgba(255,255,255,0.3);
-                "></span>
-                ${drone.details.color}
-              </span>
-            </div>
+          <div style="font-size: 12px; line-height: 1.8; display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px;">
             
-            <div style="
-              margin-top: 12px;
-              padding-top: 12px;
-              border-top: 1px solid rgba(255,255,255,0.1);
-              font-size: 10px;
-              color: rgba(255,255,255,0.5);
-              display: flex;
-              align-items: center;
-              gap: 4px;
-            ">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
-              </svg>
-              ${drone.lat.toFixed(6)}, ${drone.lng.toFixed(6)}
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+              <div style="font-size: 10px; text-transform: uppercase; font-weight: 600; color: #9ca3af; border-bottom: 1px solid #374151; padding-bottom: 4px;">INFO</div>
+              <div style="display: grid; grid-template-columns: auto 1fr; gap: 4px 12px;">
+                <span style="color: rgba(255,255,255,0.6);">Mission:</span>
+                <span style="font-weight: 600;">${drone.mission || drone.objective}</span>
+                
+                <span style="color: rgba(255,255,255,0.6);">Target:</span>
+                <span style="font-weight: 600;">${drone.target || 'N/A'}</span>
+                
+                <span style="color: rgba(255,255,255,0.6);">Speed:</span>
+                <span style="font-weight: 600;">${speed.toFixed(1)} m/s</span>
+                
+                <span style="color: rgba(255,255,255,0.6);">Altitude:</span>
+                <span style="font-weight: 600;">${altitude.toFixed(1)} m</span>
+
+                <span style="color: rgba(255,255,255,0.6);">Group:</span>
+                <span style="font-weight: 600;">${drone.groupId}</span>
+              </div>
             </div>
+
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+              <div style="font-size: 10px; text-transform: uppercase; font-weight: 600; color: #9ca3af; border-bottom: 1px solid #374151; padding-bottom: 4px;">STATUS</div>
+              <div style="display: grid; grid-template-columns: auto 1fr; gap: 4px 12px;">
+                ${renderStatus('GPS Spoof', drone.gpsSpoofing)}
+                ${renderStatus('Mag Noise', drone.magNoising)}
+                ${renderStatus('Acc Noise', drone.accNoising)}
+                ${renderStatus('Ang Noise', drone.angNoising)}
+              </div>
+            </div>
+
+            <div style="grid-column: 1 / -1; display: flex; flex-direction: column; gap: 8px; margin-top: 8px;">
+              <div style="font-size: 10px; text-transform: uppercase; font-weight: 600; color: #9ca3af; border-bottom: 1px solid #374151; padding-bottom: 4px;">TELEMETRY</div>
+              <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px 12px; text-align: center;">
+                <div>
+                  <span style="color: rgba(255,255,255,0.6); font-size: 10px;">PITCH</span><br/>
+                  <span style="font-weight: 600; font-size: 14px;">${pitchAngle.toFixed(2)}°</span>
+                </div>
+                <div>
+                  <span style="color: rgba(255,255,255,0.6); font-size: 10px;">YAW</span><br/>
+                  <span style="font-weight: 600; font-size: 14px;">${yawAngle.toFixed(2)}°</span>
+                </div>
+                <div>
+                  <span style="color: rgba(255,255,255,0.6); font-size: 10px;">ROW</span><br/>
+                  <span style="font-weight: 600; font-size: 14px;">${rowAngle.toFixed(2)}°</span>
+                </div>
+              </div>
+            </div>
+
+          </div>
+          
+          <div style="
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+            font-size: 10px;
+            color: rgba(255,255,255,0.5);
+            display: flex;
+            align-items: center;
+            gap: 4px;
+          ">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+            </svg>
+            ${lat.toFixed(6)}, ${lng.toFixed(6)}
+            <span style="flex-grow: 1;"></span>
+            ID: ${drone.id}
           </div>
         </div>
       </div>
     `;
   };
 
-  // Function to toggle map style
   const toggleMapStyle = (
     event: React.MouseEvent<HTMLElement>,
     newStyle: '3d' | '2d' | null,
@@ -689,15 +643,17 @@ export default function MapComponent({
     const currentCenter = map.current.getCenter();
     const currentZoom = map.current.getZoom();
     const currentBearing = map.current.getBearing();
+    const currentPitch = map.current.getPitch();
 
     if (newStyle === '2d') {
       map.current.setStyle('mapbox://styles/mapbox/satellite-streets-v12');
       map.current.once('style.load', () => {
         if (map.current) {
-          map.current.easeTo({
-            pitch: 0,
-            bearing: 0,
-            duration: 1000
+          map.current.jumpTo({
+            center: currentCenter,
+            zoom: currentZoom,
+            bearing: currentBearing,
+            pitch: 0
           });
           
           map.current.addSource('mapbox-dem', {
@@ -716,10 +672,11 @@ export default function MapComponent({
       map.current.setStyle('mapbox://styles/mapbox/standard');
       map.current.once('style.load', () => {
         if (map.current) {
-          map.current.easeTo({
-            pitch: 45,
+          map.current.jumpTo({
+            center: currentCenter,
+            zoom: currentZoom,
             bearing: currentBearing,
-            duration: 1000
+            pitch: 45
           });
           
           map.current.addSource('mapbox-dem', {
@@ -777,26 +734,29 @@ export default function MapComponent({
 
     setMapStyle(newStyle);
   };
-
+  
   const redrawAllContent = () => {
+    // Clear all popups
+    markersRef.current.forEach((markerData) => {
+      markerData.popup.remove();
+      markerData.marker.remove();
+    });
+    markersRef.current.clear();
+    selectedPopupRef.current = null;
+
     if (droneRoutes && droneRoutes.size > 0) {
-      droneRoutes.forEach((updates, objId) => {
+      droneRoutes.forEach((updates, codeName) => {
         if (updates.length >= 2) {
           const latestUpdate = updates[updates.length - 1];
-          const color = getColorHex(latestUpdate.details.color);
-          drawCompleteRoute(objId, updates, color);
-          drawHistoricalMarkers(objId, updates, color);
+          const color = getColorHex(latestUpdate.color);
+          drawCompleteRoute(codeName, updates, color);
+          drawHistoricalMarkers(codeName, updates, color);
         }
       });
     }
 
-    markersRef.current.forEach((markerData) => {
-      markerData.marker.remove();
-    });
-    markersRef.current.clear();
-
     drones.forEach((drone) => {
-      const color = getColorHex(drone.details.color);
+      const color = getColorHex(drone.color);
       createNewMarker(drone, color);
     });
   };
@@ -809,11 +769,13 @@ export default function MapComponent({
     map.current = new mapboxgl.Map({
       container: mapContainer.current,
       style: 'mapbox://styles/mapbox/standard',
-      center: [100.5391, 13.7465],
-      zoom: 15.5,
+      center: center,
+      zoom: zoom,
       pitch: 45,
       bearing: -17.6,
       antialias: true,
+      minZoom: 0,
+      maxZoom: 22,
     });
 
     map.current.addControl(new mapboxgl.NavigationControl(), 'top-right');
@@ -907,6 +869,7 @@ export default function MapComponent({
         map.current.remove();
         map.current = null;
       }
+      selectedPopupRef.current = null;
     };
   }, []);
 
@@ -916,12 +879,12 @@ export default function MapComponent({
     console.log('🔄 Updating markers for 3D mode:', is3DMode.current);
     
     markersRef.current.forEach((markerData, droneId) => {
-      const drone = drones.find(d => d.obj_id === droneId);
+      const drone = drones.find(d => d.codeName === droneId); 
       if (drone) {
         const altitude = calculateAltitude(drone);
         
         markerData.marker.remove();
-        const color = getColorHex(drone.details.color);
+        const color = getColorHex(drone.color);
         createNewMarker(drone, color);
       }
     });
@@ -947,8 +910,8 @@ export default function MapComponent({
         } catch (e) {}
       });
 
-      allKnownDroneIdsWithRoutes.forEach(objId => {
-        const sourceId = `route-${objId}`;
+      allKnownDroneIdsWithRoutes.forEach(codeName => {
+        const sourceId = `route-${codeName}`; 
         try {
           if (map.current!.getSource(sourceId)) {
             map.current!.removeSource(sourceId);
@@ -972,37 +935,168 @@ export default function MapComponent({
     console.log('\n=== 🗺️ Drawing all 3D drone routes ===');
     console.log('Routes to draw:', droneRoutes.size);
     
-    droneRoutes.forEach((updates, objId) => {
+    droneRoutes.forEach((updates, codeName) => {
       if (updates.length < 2) {
-        console.log(`⚠️ Skipping ${objId}: only ${updates.length} update(s)`);
+        console.log(`⚠️ Skipping ${codeName}: only ${updates.length} update(s)`);
         return;
       }
 
       const latestUpdate = updates[updates.length - 1];
-      const color = getColorHex(latestUpdate.details.color);
+      const color = getColorHex(latestUpdate.color);
 
-      console.log(`Processing 3D route for ${objId} with ${updates.length} updates`);
+      console.log(`Processing 3D route for ${codeName} with ${updates.length} updates`);
 
-      drawCompleteRoute(objId, updates, color);
-      drawHistoricalMarkers(objId, updates, color);
+      drawCompleteRoute(codeName, updates, color);
+      drawHistoricalMarkers(codeName, updates, color);
     });
 
     console.log('=== ✅ All 3D routes drawn ===\n');
   }, [droneRoutes]);
 
-  useEffect(() => {
-    if (!map.current || !selectedDroneId) return;
+  const createNewMarker = (drone: OffenseDroneData, color: string) => {
+    if (!map.current) return;
+    
+    const altitude = calculateAltitude(drone);
+    const el = createDroneMarkerElement(drone, altitude);
+    const lat = Number(drone.lat); // Ensure number
+    const lng = Number(drone.lng); // Ensure number
 
-    const drone = drones.find(d => d.obj_id === selectedDroneId);
+    const marker = new mapboxgl.Marker({
+      element: el,
+      anchor: 'center',
+    })
+      .setLngLat([lng, lat]);
+    
+    if (is3DMode.current && altitude > 0) {
+      (marker as any).setAltitude(altitude);
+    }
+    
+    const popup = new mapboxgl.Popup({
+      offset: 35,
+      closeButton: false,
+      closeOnClick: false,
+    }).setHTML(createPopupHTML(drone));
+    
+    // Add hover events
+    el.addEventListener('mouseenter', () => {
+      if (map.current) { // Check if map is still mounted
+        popup.setLngLat([lng, lat]).addTo(map.current);
+      }
+    });
+
+    el.addEventListener('mouseleave', () => {
+      // Only remove the popup if it's NOT the selected one
+      if (drone.codeName !== selectedDroneId) {
+        popup.remove();
+      }
+    });
+        
+    marker.addTo(map.current);
+
+    markersRef.current.set(drone.codeName, {
+      marker,
+      color,
+      popup, // Store the popup instance
+      lastLat: lat,
+      lastLng: lng,
+      lastAlt: altitude,
+    });
+  };
+
+  useEffect(() => {
+    if (!map.current) {
+      console.warn('Map not ready for drone updates');
+      return;
+    }
+
+    const currentDroneIds = new Set(drones.map(d => d.codeName)); 
+
+    // 1. Remove markers for drones that are no longer in the list
+    markersRef.current.forEach((markerData, droneId) => {
+      if (!currentDroneIds.has(droneId)) {
+        markerData.popup.remove(); // Remove its popup too
+        markerData.marker.remove();
+        markersRef.current.delete(droneId);
+        console.log(`🗑️ Removed marker for ${droneId}`);
+      }
+    });
+
+    // 2. Add or update markers for current drones
+    drones.forEach((drone) => {
+      const droneId = drone.codeName;
+      const altitude = calculateAltitude(drone);
+      const lat = Number(drone.lat); // Ensure number
+      const lng = Number(drone.lng); // Ensure number
+      const existing = markersRef.current.get(droneId);
+
+      if (existing) {
+        // Drone exists, update its position and popup
+        const { marker, popup, lastLat, lastLng, lastAlt } = existing;
+
+        const hasMoved = lat !== lastLat || lng !== lastLng || altitude !== lastAlt;
+        
+        if (hasMoved) {
+          const markerEl = marker.getElement();
+          markerEl.classList.add('moving');
+          setTimeout(() => markerEl.classList.remove('moving'), 500);
+
+          marker.setLngLat([lng, lat]);
+          
+          if (is3DMode.current && altitude > 0) {
+            (marker as any).setAltitude(altitude);
+          } else if (is3DMode.current && altitude === 0) {
+            (marker as any).setAltitude(0);
+          }
+          
+          const color = getColorHex(drone.color);
+          
+          // Update popup HTML and position
+          popup.setLngLat([lng, lat]).setHTML(createPopupHTML(drone));
+          
+          existing.lastLat = lat;
+          existing.lastLng = lng;
+          existing.lastAlt = altitude;
+          existing.color = color;
+        }
+      } else {
+        // New drone, create a new marker
+        const color = getColorHex(drone.color);
+        console.log(`✨ Creating new marker for ${droneId}`);
+        createNewMarker(drone, color);
+      }
+    });
+  }, [drones, is3DMode.current]);
+
+  useEffect(() => {
+    if (!map.current) return;
+
+    // First, close any popup that was previously selected
+    if (selectedPopupRef.current) {
+      selectedPopupRef.current.remove();
+      selectedPopupRef.current = null;
+    }
+    
+    // Clear 'selected' class from all markers
+    document.querySelectorAll('.drone-marker.selected').forEach(el => {
+      el.classList.remove('selected');
+    });
+
+    // If no drone is selected, we're done
+    if (!selectedDroneId) return;
+
+    const drone = drones.find(d => d.codeName === selectedDroneId);
     if (!drone) return;
 
     console.log(`🎯 Flying to selected drone: ${selectedDroneId}`);
 
     const altitude = calculateAltitude(drone);
+    const lat = Number(drone.lat); // Ensure number
+    const lng = Number(drone.lng); // Ensure number
+    const currentZoom = map.current.getZoom();
 
     map.current.flyTo({
-      center: [drone.lng, drone.lat],
-      zoom: 16,
+      center: [lng, lat],
+      zoom: Math.max(currentZoom, 16),
       pitch: altitude > 0 ? 60 : 45,
       bearing: 0,
       duration: 1500,
@@ -1014,165 +1108,25 @@ export default function MapComponent({
       const markerElement = markerData.marker.getElement();
       markerElement.classList.add('selected');
       
+      // Open the popup and store it as the "selected" one
       if (!markerData.popup.isOpen()) {
-        markerData.marker.togglePopup();
+        markerData.popup.setLngLat([lng, lat]).addTo(map.current);
       }
-
-      setTimeout(() => {
-        markerElement.classList.remove('selected');
-      }, 600);
+      selectedPopupRef.current = markerData.popup;
     }
-  }, [selectedDroneId, drones]);
-
-  useEffect(() => {
-    if (!map.current) {
-      console.log('⚠️ Map not initialized yet');
-      return;
-    }
-
-    console.log('\n=== 🔄 Updating 3D drone markers ===');
-    console.log('Drones count:', drones.length);
-    console.log('3D Mode:', is3DMode.current);
-
-    const currentDroneIds = new Set(drones.map(d => d.obj_id));
-    
-    markersRef.current.forEach((markerData, droneId) => {
-      if (!currentDroneIds.has(droneId)) {
-        console.log(`🗑️ Removing marker: ${droneId}`);
-        markerData.marker.remove();
-        markersRef.current.delete(droneId);
-      }
-    });
-
-    drones.forEach((drone) => {
-      const existingMarkerData = markersRef.current.get(drone.obj_id);
-      const currentColor = getColorHex(drone.details.color);
-      const altitude = calculateAltitude(drone);
-      
-      if (existingMarkerData) {
-        const positionChanged = 
-          Number(existingMarkerData.lastLat) !== Number(drone.lat) || 
-          Number(existingMarkerData.lastLng) !== Number(drone.lng);
-
-        const altitudeChanged = existingMarkerData.lastAlt !== altitude;
-        const colorChanged = existingMarkerData.color !== currentColor;
-        const imageUrl = getImageUrl(drone.image?.publicUrl);
-        const storedImageUrl = existingMarkerData.popup.getElement()?.dataset.imageUrl;
-        const imageChanged = imageUrl !== storedImageUrl;
-
-        if (colorChanged || imageChanged || altitudeChanged) {
-          console.log(`🔄 Recreating marker for ${drone.obj_id} (altitude: ${altitude.toFixed(1)}m)`);
-          existingMarkerData.marker.remove();
-          markersRef.current.delete(drone.obj_id);
-          createNewMarker(drone, currentColor);
-        } else if (positionChanged) {
-          console.log(`🚁 DRONE ${drone.obj_id} MOVED! (altitude: ${altitude.toFixed(1)}m)`);
-          
-          const markerElement = existingMarkerData.marker.getElement();
-          markerElement.classList.add('moving');
-          
-          existingMarkerData.marker.setLngLat([Number(drone.lng), Number(drone.lat)]);
-          
-          if (is3DMode.current && altitude > 0) {
-            (existingMarkerData.marker as any).setAltitude(altitude);
-          }
-          
-          existingMarkerData.lastLat = Number(drone.lat);
-          existingMarkerData.lastLng = Number(drone.lng);
-          existingMarkerData.lastAlt = altitude;
-          existingMarkerData.popup.setHTML(createPopupHTML(drone));
-          
-          setTimeout(() => {
-            markerElement.classList.remove('moving');
-          }, 500);
-        } else {
-          existingMarkerData.popup.setHTML(createPopupHTML(drone));
-        }
-      } else {
-        console.log(`➕ Creating new 3D marker for ${drone.obj_id} at altitude ${altitude.toFixed(1)}m`);
-        createNewMarker(drone, currentColor);
-      }
-    });
-
-    console.log('=== ✅ 3D Marker update complete ===\n');
-  }, [drones]);
-
-  const createNewMarker = (drone: DroneData, droneColor: string) => {
-    if (!map.current) return;
-
-    const altitude = calculateAltitude(drone);
-    console.log(`📍 Creating 3D marker for ${drone.obj_id} at [${drone.lat}, ${drone.lng}, ${altitude.toFixed(1)}m]`);
-
-    const el = createDroneMarkerElement(drone, altitude);
-    
-    const marker = new mapboxgl.Marker({
-      element: el,
-      anchor: 'center',
-    })
-      .setLngLat([Number(drone.lng), Number(drone.lat)]);
-    
-    if (altitude > 0) {
-      (marker as any).setAltitude(altitude);
-    }
-    
-    marker.addTo(map.current);
-
-    const popup = new mapboxgl.Popup({ 
-      offset: 25,
-      closeButton: false,
-      closeOnClick: false,
-      maxWidth: '420px',
-      className: 'drone-popup'
-    }).setHTML(createPopupHTML(drone));
-
-    const popupElement = popup.getElement();
-    if (popupElement) {
-      popupElement.dataset.imageUrl = getImageUrl(drone.image?.publicUrl);
-    }
-
-    marker.setPopup(popup);
-
-    el.addEventListener('mouseenter', () => {
-      if (!popup.isOpen()) {
-        marker.togglePopup();
-      }
-    });
-    
-    el.addEventListener('mouseleave', () => {
-      if (popup.isOpen()) {
-        marker.togglePopup();
-      }
-    });
-
-    markersRef.current.set(drone.obj_id, { 
-      marker, 
-      color: droneColor,
-      popup,
-      lastLat: Number(drone.lat),
-      lastLng: Number(drone.lng),
-      lastAlt: altitude,
-    });
-
-    console.log(`✅ 3D Marker created successfully for ${drone.obj_id}`);
-  };
+  }, [selectedDroneId, drones]); // Re-run if drones array changes
 
   return (
-    <Box
-      ref={mapContainer}
-      sx={{
-        width: '100%',
-        height: '100%',
-        position: 'relative',
-      }}
-    >
-      {/* MUI Map Style Toggle Button - Positioned on the Right */}
-      <Paper
-        elevation={3}
+    <Box sx={{ width: '100%', height: '100%', position: 'relative' }}>
+      <Paper 
+        elevation={4}
         sx={{
           position: 'absolute',
-          top: 10,
-          right: 10,
-          zIndex: 1000,
+          top: 16,
+          right: 16,
+          zIndex: 10,
+          background: 'rgba(255, 255, 255, 0.9)',
+          backdropFilter: 'blur(5px)',
         }}
       >
         <ToggleButtonGroup
@@ -1182,16 +1136,17 @@ export default function MapComponent({
           aria-label="map style"
           size="small"
         >
-          <ToggleButton value="3d" aria-label="3d view">
-            <ViewInArIcon sx={{ mr: 0.5 }} fontSize="small" />
-            3D Standard
+          <ToggleButton value="3d" aria-label="3D View" sx={{ fontWeight: 600 }}>
+            <ViewInArIcon sx={{ mr: 1, fontSize: 20 }} />
+            3D
           </ToggleButton>
-          <ToggleButton value="2d" aria-label="2d view">
-            <SatelliteAltIcon sx={{ mr: 0.5 }} fontSize="small" />
-            2D Satellite
+          <ToggleButton value="2d" aria-label="Satellite View" sx={{ fontWeight: 600 }}>
+            <SatelliteAltIcon sx={{ mr: 1, fontSize: 20 }} />
+            Satellite
           </ToggleButton>
         </ToggleButtonGroup>
       </Paper>
+      <div ref={mapContainer} style={{ width: '100%', height: '100%' }} />
     </Box>
   );
 }
