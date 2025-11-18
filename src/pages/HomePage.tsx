@@ -10,11 +10,11 @@ export default function HomePage() {
   };
 
   const handleNavigateToOffense = () => {
-    navigate('/offense');
+    navigate('/tg-offense');
   };
 
   const handleNavigateToDefense = () => {
-    navigate('/defense');
+    navigate('/tg-defense');
   };
 
   return (

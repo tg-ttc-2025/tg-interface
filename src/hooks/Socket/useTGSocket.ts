@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState} from 'react';
 import { io, Socket } from 'socket.io-client';
-import type { TGDetectionObject, DroneObject, transformTGDetectionToDrone } from '../../services/tgDefenseDetectionService';
+
 import { transformTGDetectionToDrone as transform } from '../../services/tgDefenseDetectionService';
+import type { DroneObject } from '../../types/drone.type';
+
+type TGDetectionObject = Parameters<typeof transform>[0];
 
 interface RealtimeDetection {
   objects: DroneObject[];

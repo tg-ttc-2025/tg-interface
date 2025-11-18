@@ -66,7 +66,7 @@ export const tgDefenseService = {
   async getDetectionHistory(limit: number = 100, offset: number = 0): Promise<DroneObject[]> {
     try {
       const response = await fetch(
-        `${API_BASE_URL}/ttc/api/offense/history?limit=${limit}&offset=${offset}`
+        `${API_BASE_URL}/ttc/api/defense/history?limit=${limit}&offset=${offset}`
       );
       
       if (!response.ok) {

@@ -21,23 +21,12 @@ import {
     History as HistoryIcon,
     FilterList,
     Clear,
+    GpsFixed as GpsFixedIcon,
+    Speed as SpeedIcon,
+    Height as HeightIcon,
 } from '@mui/icons-material';
-import { useState, useMemo } from 'react';
-
-interface DroneObject {
-    obj_id: string;
-    type: string;
-    lat: number | string;
-    lng: number | string;
-    objective: string;
-    size: string;
-    details: {
-        color: string;
-        speed: number | string;
-    };
-    image?: { publicUrl: string; filename: string; };
-    images?: Array<any>;
-}
+import { useState, useMemo, useEffect } from 'react';
+import type { DroneObject } from '../../../types/drone.type';
 
 interface DroneUpdate extends DroneObject {
     updateId: string;
@@ -60,6 +49,7 @@ export default function TGHistory({
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedObjId, setSelectedObjId] = useState<string | null>(null);
     const [showFilters, setShowFilters] = useState(false);
+    const [recentlyUpdatedIds, setRecentlyUpdatedIds] = useState<Set<string>>(new Set());
     
     // Get unique object IDs
     const uniqueObjIds = useMemo(() => {
@@ -67,7 +57,7 @@ export default function TGHistory({
         return Array.from(ids).sort();
     }, [allHistory]);
 
-    // FIXED: Apply filters in the correct order
+    // Apply filters
     const filteredHistory = useMemo(() => {
         let filtered = allHistory;
 
@@ -88,6 +78,30 @@ export default function TGHistory({
 
         return filtered;
     }, [allHistory, selectedObjId, searchTerm]);
+
+    // Track recently updated items - FIXED: Use useEffect instead of useMemo
+    useEffect(() => {
+        const newIds = new Set<string>();
+        const fiveSecondsAgo = Date.now() - 5000;
+        
+        filteredHistory.forEach(drone => {
+            if (drone.lastUpdated > fiveSecondsAgo) {
+                newIds.add(drone.updateId);
+            }
+        });
+        
+        // Only update if there are actually new items
+        if (newIds.size > 0) {
+            setRecentlyUpdatedIds(newIds);
+            
+            // Clear after animation
+            const timer = setTimeout(() => {
+                setRecentlyUpdatedIds(new Set());
+            }, 5000);
+            
+            return () => clearTimeout(timer);
+        }
+    }, [filteredHistory.length]); // Only run when new items are added
 
     // Calculate statistics based on filtered results
     const stats = useMemo(() => {
@@ -112,6 +126,13 @@ export default function TGHistory({
         }
     };
 
+    // Handle card click
+    const handleDroneCardClick = (objId: string) => {
+        if (onHistorySelect) {
+            onHistorySelect(objId);
+        }
+    };
+
     // Handle clear filters
     const handleClearFilters = () => {
         setSearchTerm('');
@@ -122,6 +143,17 @@ export default function TGHistory({
         if (onHistorySelect) {
             onHistorySelect(null);
         }
+    };
+
+    // Get image URL
+    const getImageUrl = (detection: DroneUpdate): string | null => {
+        if (detection.image?.publicUrl) {
+            return detection.image.publicUrl;
+        }
+        if (detection.image && detection.image) {
+            return detection.image.publicUrl || null;
+        }
+        return null;
     };
 
     const getColorHex = (color: string): string => {
@@ -136,10 +168,10 @@ export default function TGHistory({
             white: '#f9fafb',
             orange: '#f97316',
         };
-        return colorMap[color.toLowerCase()] || '#ef4444';
+        return colorMap[color.toLowerCase()] || '#eab308';
     };
 
-    const formatTimestamp = (timestamp: number): string => {
+    const formatTimestamp = (timestamp: any): any => {
         const date = new Date(timestamp);
         return date.toLocaleString('en-US', {
             month: 'short',
@@ -149,6 +181,24 @@ export default function TGHistory({
             second: '2-digit',
         });
     };
+
+    const formatSpeed = (speed: number | string): string => {
+        const speedNum = typeof speed === 'string' ? parseFloat(speed) : speed;
+        return speedNum.toFixed(1);
+    };
+
+    const getAltitude = (drone: DroneUpdate): string => {
+        if (drone.rawData?.alt) {
+            return drone.rawData.alt;
+        }
+        return '0';
+    };
+
+    const getLastUpdated = (drone: DroneUpdate): any => {
+        if(drone.rawData?.updatedAt){
+            return drone.rawData?.updatedAt;
+        }
+    }
 
     return (
         <Box
@@ -219,7 +269,7 @@ export default function TGHistory({
 
             {/* Filters Section */}
             <Collapse in={showFilters}>
-                <Box sx={{ p: 2, bgcolor: 'rgba(59, 130, 246, 0.1)', borderBottom: '1px solid rgba(255, 255, 255, 0.1)' }}>
+                <Box sx={{ p: 2, bgcolor: 'rgba(245, 176, 39, 0.1)', borderBottom: '1px solid rgba(255, 255, 255, 0.1)' }}>
                     
                     {/* Object ID Filter */}
                     <FormControl fullWidth size="small" sx={{ mb: 2 }}>
@@ -288,7 +338,8 @@ export default function TGHistory({
                         sx: {
                             backgroundColor: 'rgba(255, 255, 255, 0.05)',
                             color: 'white',
-                            borderRadius: '0px','& .MuiInputBase-input': {
+                            borderRadius: '0px',
+                            '& .MuiInputBase-input': {
                                 padding: '6px 10px',
                                 fontSize: '0.8rem', 
                             },
@@ -311,8 +362,8 @@ export default function TGHistory({
                 <Box
                     sx={{
                         flex: 1,
-                        backgroundColor: 'rgba(59, 130, 246, 0.15)',
-                        border: '1px solid rgba(59, 130, 246, 0.3)',
+                        backgroundColor: 'rgba(245, 176, 39, 0.15)',
+                        border: '1px solid rgba(245, 176, 39, 0.3)',
                         padding: 1.5,
                         display: 'flex',
                         flexDirection: 'column',
@@ -322,7 +373,7 @@ export default function TGHistory({
                     <Typography sx={{ color: 'rgba(255, 255, 255, 0.6)', fontSize: '0.65rem', fontWeight: 600, textTransform: 'uppercase', mb: 0.5 }}>
                         Objects
                     </Typography>
-                    <Typography sx={{ color: '#3b82f6', fontSize: '1.5rem', fontWeight: 700, lineHeight: 1 }}>
+                    <Typography sx={{ color: '#F5B027', fontSize: '1.5rem', fontWeight: 700, lineHeight: 1 }}>
                         {stats.uniqueObjects}
                     </Typography>
                 </Box>
@@ -330,8 +381,8 @@ export default function TGHistory({
                 <Box
                     sx={{
                         flex: 1,
-                        backgroundColor: 'rgba(34, 197, 94, 0.15)',
-                        border: '1px solid rgba(34, 197, 94, 0.3)',
+                        backgroundColor: 'rgba(234, 179, 8, 0.15)',
+                        border: '1px solid rgba(234, 179, 8, 0.3)',
                         padding: 1.5,
                         display: 'flex',
                         flexDirection: 'column',
@@ -341,7 +392,7 @@ export default function TGHistory({
                     <Typography sx={{ color: 'rgba(255, 255, 255, 0.6)', fontSize: '0.65rem', fontWeight: 600, textTransform: 'uppercase', mb: 0.5 }}>
                         Records
                     </Typography>
-                    <Typography sx={{ color: '#22c55e', fontSize: '1.5rem', fontWeight: 700, lineHeight: 1 }}>
+                    <Typography sx={{ color: '#eab308', fontSize: '1.5rem', fontWeight: 700, lineHeight: 1 }}>
                         {stats.totalDetections}
                     </Typography>
                 </Box>
@@ -349,8 +400,8 @@ export default function TGHistory({
                 <Box
                     sx={{
                         flex: 1,
-                        backgroundColor: 'rgba(168, 85, 247, 0.15)',
-                        border: '1px solid rgba(168, 85, 247, 0.3)',
+                        backgroundColor: 'rgba(217, 159, 44, 0.15)',
+                        border: '1px solid rgba(217, 159, 44, 0.3)',
                         padding: 1.5,
                         display: 'flex',
                         flexDirection: 'column',
@@ -360,7 +411,7 @@ export default function TGHistory({
                     <Typography sx={{ color: 'rgba(255, 255, 255, 0.6)', fontSize: '0.65rem', fontWeight: 600, textTransform: 'uppercase', mb: 0.5 }}>
                         Avg
                     </Typography>
-                    <Typography sx={{ color: '#a855f7', fontSize: '1.5rem', fontWeight: 700, lineHeight: 1 }}>
+                    <Typography sx={{ color: '#d99f2c', fontSize: '1.5rem', fontWeight: 700, lineHeight: 1 }}>
                         {stats.avgPerObject}
                     </Typography>
                 </Box>
@@ -406,85 +457,168 @@ export default function TGHistory({
                     </Box>
                 )}
 
-                {!isLoading && filteredHistory.map((detection) => {
-                    const droneColor = getColorHex(detection.details.color);
-                    const isSelected = selectedObjId === detection.obj_id;
+                {!isLoading && filteredHistory.map((drone) => {
+                    const droneColor = getColorHex(drone.details.color);
+                    const imageUrl = getImageUrl(drone);
+                    const recentlyUpdated = recentlyUpdatedIds.has(drone.updateId);
                     
                     return (
                         <Box
-                            key={detection.updateId}
+                            key={drone.updateId}
+                            onClick={() => handleDroneCardClick(drone.obj_id)}
                             sx={{
-                                backgroundColor: isSelected 
-                                    ? '#7b693cff' 
-                                    : '#392d13ff',
-                                border: `1px solid ${isSelected ? '#8b671dff' : '#fab833ff'}`,
-                                borderLeft: `4px solid #fab833ff`,
+                                backgroundColor: recentlyUpdated 
+                                    ? 'rgba(245, 176, 39, 0.25)' 
+                                    : 'rgba(245, 176, 39, 0.1)',
+                                border: `1px solid ${recentlyUpdated ? 'rgba(245, 176, 39, 0.6)' : 'rgba(245, 176, 39, 0.3)'}`,
+                                borderLeft: `4px solid ${droneColor}`,
                                 borderRadius: '8px',
                                 padding: 2,
-                                mb: 1.5,
+                                mb: 2,
+                                cursor: 'pointer',
+                                position: 'relative',
+                                overflow: 'hidden',
                                 transition: 'all 0.3s ease',
+                                animation: recentlyUpdated ? 'slideIn 0.5s ease-out, pulse 1s ease-in-out' : 'none',
+                                '@keyframes slideIn': {
+                                    '0%': {
+                                        transform: 'translateX(-100%)',
+                                        opacity: 0,
+                                    },
+                                    '100%': {
+                                        transform: 'translateX(0)',
+                                        opacity: 1,
+                                    },
+                                },
+                                '@keyframes pulse': {
+                                    '0%, 100%': {
+                                        opacity: 1,
+                                    },
+                                    '50%': {
+                                        opacity: 0.8,
+                                    },
+                                },
                                 '&:hover': {
-                                    backgroundColor: '#634914ff',
-                                    border: '1px solid #b7882cff',
-                                    borderLeft: `4px solid #fab833ff`,
+                                    backgroundColor: 'rgba(245, 176, 39, 0.2)',
+                                    border: '1px solid rgba(245, 176, 39, 0.5)',
+                                    borderLeft: `4px solid ${droneColor}`,
                                     transform: 'translateX(4px)',
+                                    boxShadow: `0 0 20px ${droneColor}40`,
                                 },
                             }}
                         >
+                            {recentlyUpdated && (
+                                <Typography
+                                    sx={{
+                                        position: 'absolute',
+                                        zIndex: 1000,
+                                        top: 8,
+                                        right: 8,
+                                        backgroundColor: '#eab308',
+                                        color: 'white',
+                                        fontSize: '0.6rem',
+                                        fontWeight: 700,
+                                        padding: '2px 6px',
+                                        borderRadius: '4px',
+                                        textTransform: 'uppercase',
+                                    }}
+                                >
+                                    NEW
+                                </Typography>
+                            )}
+
+                            {imageUrl && (
+                                <Box
+                                    sx={{
+                                        width: '100%',
+                                        height: '120px',
+                                        borderRadius: '6px',
+                                        overflow: 'hidden',
+                                        mb: 1.5,
+                                        position: 'relative',
+                                        backgroundColor: 'rgba(0, 0, 0, 0.3)',
+                                        border: '1px solid rgba(245, 176, 39, 0.2)',
+                                    }}
+                                >
+                                    <img
+                                        src={imageUrl}
+                                        alt={`Detection ${drone.obj_id}`}
+                                        style={{
+                                            width: '100%',
+                                            height: '100%',
+                                            objectFit: 'cover',
+                                        }}
+                                        onError={(e) => {
+                                            const target = e.target as HTMLImageElement;
+                                            target.style.display = 'none';
+                                            console.warn('Failed to load image:', imageUrl);
+                                        }}
+                                    />
+                                </Box>
+                            )}
+
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
                                 <Box
                                     sx={{
-                                        width: 8,
-                                        height: 8,
+                                        width: 10,
+                                        height: 10,
                                         borderRadius: '50%',
                                         backgroundColor: droneColor,
-                                        boxShadow: `0 0 6px ${droneColor}`,
+                                        boxShadow: `0 0 8px ${droneColor}`,
                                     }}
                                 />
-                                <Typography sx={{ color: 'white', fontWeight: 600, flex: 1, fontSize: '0.9rem' }}>
-                                    {detection.obj_id}
+                                <Typography sx={{ color: 'white', fontWeight: 600, flex: 1 }}>
+                                    {drone.obj_id}
                                 </Typography>
-                                <Typography sx={{ color: 'rgba(255, 255, 255, 0.4)', fontSize: '0.65rem' }}>
-                                    {formatTimestamp(detection.lastUpdated)}
+                                <Typography sx={{ 
+                                    color: 'rgba(245, 176, 39, 0.8)', 
+                                    fontSize: '0.7rem',
+                                    fontWeight: 500,
+                                }}>
+                                    Click to locate →
                                 </Typography>
                             </Box>
 
-                            <Typography sx={{ color: 'rgba(255, 255, 255, 0.6)', fontSize: '0.75rem', mb: 0.5 }}>
-                                📍 {Number(detection.lat).toFixed(6)}, {Number(detection.lng).toFixed(6)}
+                            <Typography sx={{ 
+                                color: 'rgba(255, 255, 255, 0.7)', 
+                                fontSize: '0.85rem', 
+                                mb: 0.5,
+                                display: 'flex',       
+                                alignItems: 'center'  
+                            }}>
+                                <GpsFixedIcon sx={{ fontSize: '1rem', mr: 0.75, color: '#F5B027' }} /> 
+                                {Number(drone.lat).toFixed(6)}, {Number(drone.lng).toFixed(6)}
                             </Typography>
 
-                            <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
-                                <Chip
-                                    label={detection.type.toUpperCase()}
-                                    size="small"
-                                    sx={{
-                                        backgroundColor: 'rgba(59, 130, 246, 0.3)',
-                                        color: 'white',
-                                        fontSize: '0.65rem',
-                                        height: '20px',
-                                    }}
-                                />
-                                <Chip
-                                    label={detection.details.color}
-                                    size="small"
-                                    sx={{
-                                        backgroundColor: droneColor,
-                                        color: 'white',
-                                        fontSize: '0.65rem',
-                                        height: '20px',
-                                    }}
-                                />
-                                <Chip
-                                    label={`${detection.details.speed} m/s`}
-                                    size="small"
-                                    sx={{
-                                        backgroundColor: 'rgba(255, 255, 255, 0.1)',
-                                        color: 'white',
-                                        fontSize: '0.65rem',
-                                        height: '20px',
-                                    }}
-                                />
-                            </Box>
+                            <Typography sx={{ 
+                                color: 'rgba(255, 255, 255, 0.7)', 
+                                fontSize: '0.85rem', 
+                                mb: 0.5,
+                                display:'flex',
+                                alignItems: 'center'   
+                            }}>
+                                <SpeedIcon sx={{ fontSize: '1rem', mr: 0.75, color: '#eab308' }}/> 
+                                {formatSpeed(drone.details.speed)} m/s
+                            </Typography>
+
+                            <Typography sx={{ 
+                                color: 'rgba(255, 255, 255, 0.7)', 
+                                fontSize: '0.85rem', 
+                                mb: 0.5,
+                                display:'flex',
+                                alignItems: 'center'   
+                            }}>
+                                <HeightIcon sx={{ fontSize: '1rem', mr: 0.75, color: '#d99f2c' }}/> 
+                                {getAltitude(drone)} m
+                            </Typography>
+
+                            <Typography sx={{ 
+                                color: 'rgba(255, 255, 255, 0.5)', 
+                                fontSize: '0.7rem',
+                                mt: 1,
+                            }}>
+                                {"Last updated: " + formatTimestamp(drone.rawData?.updatedAt)}
+                            </Typography>
                         </Box>
                     );
                 })}

@@ -331,18 +331,18 @@ export default function TGDefensePage() {
                         variant="contained"
                         onClick={handleRefreshHistory}
                         sx={{
-                            backgroundColor: '#3b82f6',
+                            backgroundColor: '#F5B027',
                             color: 'white',
                             fontWeight: 600,
                             fontSize: '0.9rem',
                             padding: '8px 20px',
                             boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
                             '&:hover': {
-                                backgroundColor: '#2563eb',
+                                backgroundColor: '#765513ff',
                             }
                         }}
                     >
-                        🔄 REFRESH
+                        REFRESH
                     </Button>
                 )}
             </Box>

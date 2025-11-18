@@ -35,6 +35,19 @@ export default function TGDefense({ allDrones, onDroneClick, isConnected = false
         }
     };
 
+        const formatThaiDateTime = (dateString: any | Date): string => {
+    return new Date(dateString).toLocaleString('th-TH', {
+        timeZone: 'Asia/Bangkok',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+    });
+};
+
     const getColorHex = (color: string): string => {
         const colorMap: Record<string, string> = {
             red: '#ef4444',
@@ -178,6 +191,7 @@ export default function TGDefense({ allDrones, onDroneClick, isConnected = false
                         pb: 1,
                         display: 'flex',
                         gap: 1.5,
+                        ml:1,
                         fontWeight: 700,
                         fontSize: '0.8rem',
                     }}>
@@ -503,6 +517,16 @@ export default function TGDefense({ allDrones, onDroneClick, isConnected = false
                                     <HeightIcon sx={{ fontSize: '1rem', mr: 0.75 }}/> 
                                     {drone.alt} m
                                 </Typography>
+                                                                <Typography sx={{
+                                                                    color: 'rgba(255, 255, 255, 0.6)',
+                                                                    fontSize: '0.75rem',
+                                                                    mt: 1,
+                                                                    fontStyle: 'italic',
+                                                                }}>
+                                                                    Time: {formatThaiDateTime(drone.rawData?.createdAt)}
+                                                                </Typography>
+                                                            
+                                
                         </Box>
                     );
                 })}

@@ -29,11 +29,11 @@ export default function Navbar() {
     const { data } = useCamera(DEFENCE_LOCATION, DEFENCE_TOKEN);
 
     const handleNavigateToOffense = () => {
-        navigate('/offense');
+        navigate('/tg-offense');
     };
 
     const handleNavigateToDefense = () => {
-        navigate('/defense');
+        navigate('/tg-defense');
     };
 
     const [currentTime, setCurrentTime] = useState(new Date());
